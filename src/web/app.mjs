@@ -79,16 +79,19 @@ async function render(snapshotOverride = null) {
   try {
     const snapshot = snapshotOverride || await snapshotForActiveTab();
     joinCode = snapshot.session.joinCode;
+    document.body.classList.toggle("isPlayerRoute", activeTab === "player");
     app.innerHTML = `
-      <div class="shell theme-${activeTheme}">
-        <header class="topbar">
-          <div class="brand"><span class="brandMark">FT</span><span>Family Trivia Codex</span></div>
-          <nav class="tabs" aria-label="Interfaces">
-            ${tabButton("operator", "Operator")}
-            ${tabButton("player", "Player")}
-            ${tabButton("display", "Display")}
-          </nav>
-        </header>
+      <div class="shell theme-${activeTheme} route-${activeTab}">
+        ${activeTab === "player" ? "" : `
+          <header class="topbar">
+            <div class="brand"><span class="brandMark">FT</span><span>Family Trivia Codex</span></div>
+            <nav class="tabs" aria-label="Interfaces">
+              ${tabButton("operator", "Operator")}
+              ${tabButton("player", "Player")}
+              ${tabButton("display", "Display")}
+            </nav>
+          </header>
+        `}
         ${activeTab === "operator" ? operatorView(snapshot) : ""}
         ${activeTab === "player" ? playerView(snapshot) : ""}
         ${activeTab === "display" ? displayView(snapshot) : ""}
@@ -256,7 +259,7 @@ function joinPanel(snapshot) {
   return `
     <section class="joinPanel stack">
       <label class="label">Join code<input id="joinCode" value="${snapshot.session.joinCode}"></label>
-      <label class="label">Display name<input id="displayName" value="" placeholder="Your name"></label>
+      <label class="label">Name<input id="displayName" value="" placeholder="Your name"></label>
       <button id="join" class="primaryBtn">Join Game</button>
     </section>
   `;
@@ -328,7 +331,7 @@ function clearStoredPlayerId() {
 function playerHud(snapshot) {
   return `
     <section class="playerHud">
-      <div><span class="eyebrow">Player</span><strong>${escapeHtml(snapshot.player.displayName)}</strong></div>
+      <strong class="playerName">${escapeHtml(snapshot.player.displayName)}</strong>
       <div class="miniStats">${stat("Correct", snapshot.player.correctCount)}${stat("Streak", snapshot.player.streak)}</div>
       <p class="ruleHud">${playerRuleHud(snapshot.player.progress)}</p>
     </section>

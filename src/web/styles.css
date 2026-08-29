@@ -31,10 +31,15 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+body.isPlayerRoute {
+  overflow: hidden;
+}
+
 button,
 input,
 select {
   font: inherit;
+  min-width: 0;
 }
 
 button {
@@ -83,6 +88,12 @@ p {
     linear-gradient(135deg, color-mix(in srgb, var(--accent-3) 12%, transparent) 0 25%, transparent 25% 50%, color-mix(in srgb, var(--accent) 7%, transparent) 50% 75%, transparent 75%),
     var(--field);
   background-size: 42px 42px, auto;
+}
+
+.route-player {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
 }
 
 .theme-confetti {
@@ -609,6 +620,12 @@ p {
   transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
+.choiceTile strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.18;
+}
+
 .choiceTile span {
   display: grid;
   width: 34px;
@@ -705,18 +722,24 @@ p {
 
 .playerStage {
   display: grid;
-  min-height: calc(100vh - 72px);
+  height: 100dvh;
+  min-height: 0;
   place-items: center;
-  padding: 24px;
+  overflow: hidden;
+  padding: 10px;
 }
 
 .phoneFrame {
   width: min(430px, 100%);
-  min-height: min(760px, calc(100vh - 110px));
+  height: min(760px, calc(100dvh - 20px));
+  max-height: calc(100dvh - 20px);
+  min-height: 0;
   display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   align-content: start;
-  gap: 14px;
-  padding: 18px;
+  gap: 10px;
+  overflow: hidden;
+  padding: 14px;
   border: 10px solid #111827;
   border-radius: 36px;
   background:
@@ -743,34 +766,64 @@ p {
 .playerHud,
 .joinPanel,
 .phonePanel {
-  padding: 18px;
+  padding: 14px;
+}
+
+.playerStage .joinPanel {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.playerStage .joinPanel .primaryBtn {
+  grid-column: 1 / -1;
 }
 
 .playerHud {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(132px, 0.85fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.playerName {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--primary);
+  font-size: 22px;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerHud .miniStats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .ruleHud {
   grid-column: 1 / -1;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: 8px;
   background: color-mix(in srgb, var(--accent) 11%, white);
   color: var(--primary);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
+  line-height: 1.2;
 }
 
 .phonePanel {
-  min-height: 360px;
+  min-height: 0;
   overflow: hidden;
 }
 
 .playerQuestion h1 {
-  font-size: 24px;
+  font-size: clamp(18px, 5.8vw, 24px);
 }
 
 .choiceGrid.player {
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .lockedNote {
@@ -1098,6 +1151,10 @@ body.isFullscreen .displayStage {
   .choiceGrid {
     grid-template-columns: 1fr;
   }
+
+  .choiceGrid.player {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 560px) {
@@ -1112,6 +1169,10 @@ body.isFullscreen .displayStage {
     padding: 12px;
   }
 
+  .route-player .playerStage {
+    padding: 8px;
+  }
+
   .controlRail,
   .questionPanel,
   .leaderboardPanel,
@@ -1121,25 +1182,81 @@ body.isFullscreen .displayStage {
   }
 
   .phoneFrame {
-    min-height: auto;
+    height: calc(100dvh - 16px);
+    max-height: calc(100dvh - 16px);
+    min-height: 0;
     border-width: 6px;
     border-radius: 28px;
-    padding: 14px;
+    gap: 8px;
+    padding: 10px;
   }
 
   .phoneTop {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .phoneTop .status {
+    padding: 4px 9px;
+    font-size: 11px;
+  }
+
+  .phoneTop strong {
+    font-size: 13px;
+  }
+
+  .playerHud,
+  .joinPanel,
+  .phonePanel,
+  .leaderboardPanel.compact {
+    padding: 10px;
+  }
+
+  .playerHud {
+    grid-template-columns: 1fr;
+  }
+
+  .playerName {
+    font-size: 20px;
+  }
+
+  .playerHud .miniStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .miniStats .stat {
-    flex: 1 1 120px;
+    min-width: 0;
+    padding: 8px;
+  }
+
+  .miniStats .stat span {
+    font-size: 11px;
+  }
+
+  .miniStats .stat strong {
+    font-size: 18px;
+  }
+
+  .questionPanel {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .questionHeader {
+    gap: 8px;
+  }
+
+  .questionPanel h1,
+  .questionPanel h2 {
+    font-size: 18px;
   }
 
   .choiceTile {
     grid-template-columns: 30px minmax(0, 1fr);
-    min-height: 64px;
-    padding: 12px;
+    gap: 8px;
+    min-height: 58px;
+    padding: 9px;
   }
 
   .choiceTile span {
@@ -1150,6 +1267,16 @@ body.isFullscreen .displayStage {
   .fieldGrid,
   .displayChoices {
     grid-template-columns: 1fr;
+  }
+
+  .choiceGrid.player,
+  .playerStage .joinPanel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .leaderboardPanel.compact .sectionHeader,
+  .leaderboardPanel.compact .leaderboard {
+    display: none;
   }
 
   .displayStage {

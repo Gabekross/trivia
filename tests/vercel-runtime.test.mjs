@@ -28,4 +28,8 @@ test("Vercel entrypoint uses the shared HTTP app", async () => {
   assert.match(clientSource, /!snapshotOverride && actionInFlight/);
   assert.match(clientSource, /joinCode: document\.querySelector\("#joinCode"\)\.value\.trim\(\)/);
   assert.match(clientSource, /!hasEditableFocus\(\) && !actionInFlight/);
+  assert.match(clientSource, /route-\$\{activeTab\}/);
+  assert.match(clientSource, /activeTab === "player" \? ""/);
+  assert.match(clientSource, /isPlayerRoute/);
+  assert.match(clientSource, /class="playerName"/);
 });
