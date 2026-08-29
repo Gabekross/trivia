@@ -1,5 +1,6 @@
 data/
 dist/
+public/
 node_modules/
 *.tsbuildinfo
 .env
