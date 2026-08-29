@@ -112,7 +112,7 @@ export class TriviaEngine {
   }
 
   findSessionByJoinCode(joinCode) {
-    const sessionId = this.joinCodes.get(String(joinCode || "").toUpperCase());
+    const sessionId = this.joinCodes.get(String(joinCode || "").trim().toUpperCase());
     return sessionId ? this.sessions.get(sessionId) : null;
   }
 

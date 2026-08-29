@@ -19,9 +19,10 @@ test("dev server exposes trusted mutation API with persistence", async () => {
       method: "POST",
       body: JSON.stringify({ title: "API Test", winnerMode: "RACE_TO_X", targetCorrect: 1 })
     });
+    const paddedJoinCode = ` ${created.joinCode.toLowerCase()} `;
     const joined = await api("/api/join", {
       method: "POST",
-      body: JSON.stringify({ joinCode: created.joinCode, displayName: "API Player" })
+      body: JSON.stringify({ joinCode: paddedJoinCode, displayName: "API Player" })
     });
     const health = await api("/api/health");
     const clientConfig = await api("/api/client-config");
@@ -35,7 +36,7 @@ test("dev server exposes trusted mutation API with persistence", async () => {
       body: JSON.stringify({ playerId: joined.playerId, choiceId: correct.id, idempotencyKey: "api-answer" })
     });
     const player = await api(`/api/sessions/${created.sessionId}/snapshot?role=PLAYER&playerId=${joined.playerId}`);
-    const byCode = await api(`/api/join-codes/${created.joinCode}`);
+    const byCode = await api(`/api/join-codes/${encodeURIComponent(paddedJoinCode)}`);
     const qr = await fetch(`${baseUrl}/api/qr?data=${encodeURIComponent(`${baseUrl}/trivia/session/${created.joinCode}`)}`);
     const qrSvg = await qr.text();
     const displayRoute = await fetch(`${baseUrl}/trivia/display/${created.sessionId}`);
