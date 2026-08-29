@@ -18,6 +18,7 @@ let realtimeChannel = null;
 let realtimeConnected = false;
 let isRendering = false;
 let pendingRender = false;
+let actionInFlight = false;
 const initialRoute = parseInitialRoute();
 
 const app = document.querySelector("#app");
@@ -25,8 +26,8 @@ const app = document.querySelector("#app");
 document.addEventListener("focusout", () => {
   if (!pendingRender) return;
   setTimeout(() => {
-    if (pendingRender && !hasEditableFocus()) render();
-  }, 0);
+    if (pendingRender && !hasEditableFocus() && !actionInFlight) render();
+  }, 350);
 });
 
 await bootstrap();
@@ -62,6 +63,10 @@ function parseInitialRoute() {
 }
 
 async function render(snapshotOverride = null) {
+  if (!snapshotOverride && actionInFlight) {
+    pendingRender = true;
+    return;
+  }
   if (!snapshotOverride && hasEditableFocus()) {
     pendingRender = true;
     return;
@@ -92,7 +97,7 @@ async function render(snapshotOverride = null) {
     bindEvents();
   } finally {
     isRendering = false;
-    if (pendingRender && !snapshotOverride && !hasEditableFocus()) {
+    if (pendingRender && !snapshotOverride && !hasEditableFocus() && !actionInFlight) {
       pendingRender = false;
       await render();
     } else {
@@ -295,17 +300,29 @@ function playerStorageKey() {
 
 function getStoredPlayerId() {
   if (!sessionId) return null;
-  return sessionStorage.getItem(playerStorageKey());
+  try {
+    return sessionStorage.getItem(playerStorageKey());
+  } catch {
+    return null;
+  }
 }
 
 function storePlayerId(playerId) {
   if (!sessionId || !playerId) return;
-  sessionStorage.setItem(playerStorageKey(), playerId);
+  try {
+    sessionStorage.setItem(playerStorageKey(), playerId);
+  } catch {
+    currentPlayerId = playerId;
+  }
 }
 
 function clearStoredPlayerId() {
   if (!sessionId) return;
-  sessionStorage.removeItem(playerStorageKey());
+  try {
+    sessionStorage.removeItem(playerStorageKey());
+  } catch {
+    currentPlayerId = null;
+  }
 }
 
 function playerHud(snapshot) {
@@ -511,6 +528,7 @@ function bindEvents() {
     const button = document.querySelector("#newSession");
     setBusy(button, "Creating");
     sessionForm = readSessionForm();
+    actionInFlight = true;
     try {
       const created = await api("/api/sessions", {
         method: "POST",
@@ -536,26 +554,32 @@ function bindEvents() {
     } catch (error) {
       showToast(error.message);
       setBusy(button, "Create Session", false);
+    } finally {
+      actionInFlight = false;
     }
   });
   document.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", async () => {
       const original = button.textContent;
       setBusy(button, "Working");
+      actionInFlight = true;
       try {
         const updated = await api(`/api/sessions/${sessionId}/operator`, { method: "POST", body: JSON.stringify({ action: button.dataset.action }) });
         await render(updated.snapshot);
       } catch (error) {
         showToast(error.message);
         setBusy(button, original, false);
+      } finally {
+        actionInFlight = false;
       }
     });
   });
   document.querySelector("#join")?.addEventListener("click", async () => {
     const button = document.querySelector("#join");
     setBusy(button, "Joining");
+    actionInFlight = true;
     try {
-      const joined = await api("/api/join", { method: "POST", body: JSON.stringify({ joinCode: document.querySelector("#joinCode").value, displayName: document.querySelector("#displayName").value }) });
+      const joined = await api("/api/join", { method: "POST", body: JSON.stringify({ joinCode: document.querySelector("#joinCode").value.trim(), displayName: document.querySelector("#displayName").value }) });
       sessionId = joined.sessionId;
       currentPlayerId = joined.playerId;
       storePlayerId(currentPlayerId);
@@ -565,10 +589,13 @@ function bindEvents() {
     } catch (error) {
       showToast(error.message);
       setBusy(button, "Join Game", false);
+    } finally {
+      actionInFlight = false;
     }
   });
   document.querySelectorAll("[data-choice]").forEach((button) => {
     button.addEventListener("click", async () => {
+      actionInFlight = true;
       document.querySelectorAll("[data-choice]").forEach((choice) => {
         choice.disabled = true;
         choice.classList.toggle("selected", choice === button);
@@ -579,6 +606,8 @@ function bindEvents() {
       } catch (error) {
         showToast(error.message);
         await render();
+      } finally {
+        actionInFlight = false;
       }
     });
   });
