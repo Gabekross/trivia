@@ -19,6 +19,13 @@ const initialRoute = parseInitialRoute();
 
 const app = document.querySelector("#app");
 
+document.addEventListener("focusout", () => {
+  if (!pendingRender) return;
+  setTimeout(() => {
+    if (pendingRender && !hasEditableFocus()) render();
+  }, 0);
+});
+
 await bootstrap();
 
 async function bootstrap() {
@@ -52,6 +59,10 @@ function parseInitialRoute() {
 }
 
 async function render(snapshotOverride = null) {
+  if (!snapshotOverride && hasEditableFocus()) {
+    pendingRender = true;
+    return;
+  }
   if (isRendering) {
     pendingRender = true;
     return;
@@ -78,7 +89,7 @@ async function render(snapshotOverride = null) {
     bindEvents();
   } finally {
     isRendering = false;
-    if (pendingRender && !snapshotOverride) {
+    if (pendingRender && !snapshotOverride && !hasEditableFocus()) {
       pendingRender = false;
       await render();
     } else {
@@ -477,10 +488,12 @@ function bindEvents() {
     await render();
   });
   document.querySelectorAll("[data-display-setting]").forEach((input) => {
-    input.addEventListener("input", async () => {
+    input.addEventListener("input", () => {
       displaySettings[input.dataset.displaySetting] = Number(input.value);
       showDisplayControls();
-      await render();
+      applyDisplaySettings();
+      const value = input.parentElement?.querySelector(".rangeValue");
+      if (value) value.textContent = `${input.value}${input.dataset.displaySetting === "scale" || input.dataset.displaySetting === "brightness" ? "%" : "px"}`;
     });
   });
   document.querySelector("#newSession")?.addEventListener("click", async () => {
@@ -582,7 +595,7 @@ function subscribe() {
   });
   pollingTimer = setInterval(() => {
     if (document.visibilityState === "visible") render();
-  }, 700);
+  }, pollInterval());
 }
 
 function updateRoute() {
@@ -620,6 +633,18 @@ function showToast(message) {
   setTimeout(() => toast.remove(), 2800);
 }
 
+function hasEditableFocus() {
+  const element = document.activeElement;
+  if (!element) return false;
+  return Boolean(element.closest("input, select, textarea, [contenteditable='true']"));
+}
+
+function pollInterval() {
+  if (activeTab === "display") return 900;
+  if (activeTab === "player") return 1100;
+  return 1800;
+}
+
 function showDisplayControls() {
   if (activeTab !== "display") return;
   displayControlsActive = true;
@@ -644,6 +669,15 @@ function applyDisplayControlsClass() {
   if (!display) return;
   display.classList.toggle("controlsActive", displayControlsActive);
   display.classList.toggle("controlsIdle", !displayControlsActive);
+}
+
+function applyDisplaySettings() {
+  const display = document.querySelector(".displayStage");
+  if (!display) return;
+  display.style.setProperty("--safe-area", `${displaySettings.safeArea}px`);
+  display.style.setProperty("--display-scale", displaySettings.scale / 100);
+  display.style.setProperty("--display-y", `${displaySettings.vertical}px`);
+  display.style.setProperty("--display-brightness", `${displaySettings.brightness}%`);
 }
 
 document.addEventListener("fullscreenchange", () => {

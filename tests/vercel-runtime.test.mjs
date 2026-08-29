@@ -14,5 +14,7 @@ test("Vercel entrypoint uses the shared HTTP app", async () => {
   assert.deepEqual(config.rewrites, [{ source: "/(.*)", destination: "/api/index.mjs" }]);
   assert.match(appSource, /polling: true/);
   assert.match(clientSource, /setInterval/);
-  assert.match(clientSource, /}, 700\)/);
+  assert.match(clientSource, /hasEditableFocus/);
+  assert.match(clientSource, /focusout/);
+  assert.match(clientSource, /pollInterval/);
 });
