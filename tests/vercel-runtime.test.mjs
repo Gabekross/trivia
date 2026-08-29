@@ -34,6 +34,7 @@ test("Vercel entrypoint uses the shared HTTP app", async () => {
   assert.match(clientSource, /class="playerName"/);
   assert.match(clientSource, /\/trivia\/join\/\$\{snapshot\.session\.joinCode\}/);
   assert.match(clientSource, /playerEndedView/);
+  assert.match(clientSource, /playerResultView/);
   assert.match(clientSource, /id="exitPlayer"/);
   assert.match(clientSource, /ruleSteps/);
   assert.match(clientSource, /landingJoinCode/);

@@ -204,6 +204,7 @@ function playerView(snapshot) {
       </section>
     `;
   }
+  if (snapshot.session.winner) return playerResultView(snapshot);
   return `
     <section class="playerStage">
       <div class="phoneFrame">
@@ -379,6 +380,26 @@ function playerEndedView(snapshot) {
           <p>${endedMessage(snapshot)}</p>
           ${snapshot.session.winner ? `<div class="endedWinner"><span>Winner</span><strong>${winnerName(snapshot)}</strong></div>` : ""}
           <button id="exitPlayer" class="primaryBtn">Exit</button>
+        </section>
+      </div>
+    </section>
+  `;
+}
+
+function playerResultView(snapshot) {
+  const isWinner = snapshot.player?.status === "WINNER";
+  return `
+    <section class="playerStage">
+      <div class="phoneFrame gameResultFrame">
+        <div class="phoneTop">
+          <span class="status">${formatStatus(snapshot.session.status)}</span>
+          <strong>${escapeHtml(snapshot.session.title)}</strong>
+        </div>
+        <section class="gameResultPanel ${isWinner ? "winnerResult" : ""}">
+          <span class="eyebrow">${isWinner ? "Winner" : "Round Complete"}</span>
+          <h1>${isWinner ? "You won!" : `${winnerName(snapshot)} won`}</h1>
+          <p>${isWinner ? "Nice work. The host will decide what happens next." : "Stay connected while the host moves the room forward."}</p>
+          <div class="endedWinner"><span>Winner</span><strong>${winnerName(snapshot)}</strong></div>
         </section>
       </div>
     </section>

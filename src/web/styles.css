@@ -32,6 +32,10 @@ body {
 }
 
 body.isPlayerRoute {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -749,7 +753,8 @@ p {
 }
 
 .joinFrame,
-.gameEndedFrame {
+.gameEndedFrame,
+.gameResultFrame {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
@@ -801,7 +806,8 @@ p {
 }
 
 .ruleCard,
-.gameEndedPanel {
+.gameEndedPanel,
+.gameResultPanel {
   border: 1px solid rgba(229, 233, 240, 0.92);
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.92);
@@ -884,7 +890,8 @@ p {
   overflow: hidden;
 }
 
-.gameEndedPanel {
+.gameEndedPanel,
+.gameResultPanel {
   min-height: 0;
   display: grid;
   align-content: center;
@@ -894,13 +901,22 @@ p {
   text-align: center;
 }
 
-.gameEndedPanel h1 {
+.gameResultPanel {
+  border-color: color-mix(in srgb, var(--accent-2) 44%, white);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent-2) 17%, white), rgba(255, 255, 255, 0.96)),
+    #ffffff;
+}
+
+.gameEndedPanel h1,
+.gameResultPanel h1 {
   color: var(--primary);
   font-size: clamp(30px, 10vw, 46px);
   line-height: 0.98;
 }
 
-.gameEndedPanel p {
+.gameEndedPanel p,
+.gameResultPanel p {
   color: var(--muted);
   line-height: 1.35;
 }
@@ -910,11 +926,11 @@ p {
   gap: 2px;
   padding: 14px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--accent-3) 18%, white);
+  background: color-mix(in srgb, var(--accent-2) 18%, white);
 }
 
 .endedWinner span {
-  color: var(--accent);
+  color: color-mix(in srgb, var(--accent-2) 76%, black);
   font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
@@ -935,7 +951,7 @@ p {
 }
 
 .choiceGrid.player {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
 }
 
@@ -980,8 +996,8 @@ p {
 }
 
 .winner {
-  border-color: color-mix(in srgb, var(--accent-3) 72%, white);
-  background: color-mix(in srgb, var(--accent-3) 18%, white);
+  border-color: color-mix(in srgb, var(--accent-2) 72%, white);
+  background: color-mix(in srgb, var(--accent-2) 18%, white);
 }
 
 .leaderboardPanel.compact {
@@ -1266,7 +1282,7 @@ body.isFullscreen .displayStage {
   }
 
   .choiceGrid.player {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1323,6 +1339,7 @@ body.isFullscreen .displayStage {
   .joinPanel,
   .ruleCard,
   .gameEndedPanel,
+  .gameResultPanel,
   .phonePanel,
   .leaderboardPanel.compact {
     padding: 10px;
@@ -1345,7 +1362,8 @@ body.isFullscreen .displayStage {
   }
 
   .joinIntro p,
-  .gameEndedPanel p {
+  .gameEndedPanel p,
+  .gameResultPanel p {
     font-size: 13px;
   }
 
@@ -1406,7 +1424,10 @@ body.isFullscreen .displayStage {
     grid-template-columns: 1fr;
   }
 
-  .choiceGrid.player,
+  .choiceGrid.player {
+    grid-template-columns: 1fr;
+  }
+
   .playerStage .joinPanel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
