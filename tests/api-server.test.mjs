@@ -10,7 +10,7 @@ const baseUrl = `http://127.0.0.1:${port}`;
 test("dev server exposes trusted mutation API with persistence", async () => {
   await rm("data", { recursive: true, force: true });
   const server = spawn(process.execPath, ["scripts/dev-server.mjs"], {
-    env: { ...process.env, PORT: String(port) },
+    env: { ...process.env, GAME_STORE: "json", PORT: String(port) },
     stdio: ["ignore", "pipe", "pipe"]
   });
   try {

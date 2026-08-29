@@ -1,8 +1,11 @@
 import { createServer } from "node:http";
 import { networkInterfaces } from "node:os";
 import { join } from "node:path";
+import { loadEnvFile } from "../src/server/env-file.mjs";
 import { createHttpApp } from "../src/server/http-app.mjs";
 import { createGameStore } from "../src/server/stores/index.mjs";
+
+await loadEnvFile();
 
 const root = join(process.cwd(), "src", "web");
 const coreRoot = join(process.cwd(), "src", "core");

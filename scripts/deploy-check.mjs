@@ -1,6 +1,8 @@
 import { deploymentConfig } from "../src/server/config.mjs";
+import { loadEnvFile } from "../src/server/env-file.mjs";
 
-const config = deploymentConfig({ ...process.env, NODE_ENV: process.env.NODE_ENV || "production" });
+await loadEnvFile();
+const config = deploymentConfig({ ...process.env, NODE_ENV: "production" });
 
 if (config.warnings.length) {
   for (const warning of config.warnings) console.warn(`Warning: ${warning}`);
