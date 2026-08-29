@@ -32,6 +32,7 @@ let pendingRender = false;
 let actionInFlight = false;
 const initialRoute = parseInitialRoute();
 let landingJoinCode = initialRoute.joinCode || null;
+let lastAnswerFeedback = null;
 
 const app = document.querySelector("#app");
 
@@ -459,9 +460,10 @@ function questionPanel(snapshot, context = "operator") {
 }
 
 function playerQuestion(snapshot, question) {
-  const answered = Boolean(snapshot.player?.currentAnswer);
+  const feedback = playerAnswerFeedback(snapshot, question);
+  const answered = Boolean(feedback);
   const answerState = answered
-    ? snapshot.player.currentAnswer.isCorrect
+    ? feedback?.isCorrect
       ? "correctAnswer"
       : "wrongAnswer"
     : "";
@@ -470,10 +472,23 @@ function playerQuestion(snapshot, question) {
     <div class="questionPanel playerQuestion">
       <div class="questionHeader"><span class="categoryPill">${escapeHtml(question.category)}</span><span class="muted">${answered ? "Locked" : "Tap one answer"}</span></div>
       <h1>${escapeHtml(question.prompt)}</h1>
-      <div class="choiceGrid player">${question.choices.map((choice) => `<button class="choiceTile tapChoice ${snapshot.player?.currentAnswer?.choiceId === choice.id ? `selected ${answerState}` : ""}" data-choice="${choice.id}" ${!snapshot.player || answered ? "disabled" : ""}><span>${choice.label}</span><strong>${escapeHtml(choice.text)}</strong></button>`).join("")}</div>
-      ${answered ? `<div class="lockedNote ${answerState}">${snapshot.player.currentAnswer.isCorrect ? "Correct. Answer locked." : "Not quite. Answer locked."}</div>` : ""}
+      <div class="choiceGrid player">${question.choices.map((choice) => `<button class="choiceTile tapChoice ${feedback?.choiceId === choice.id ? `selected ${answerState}` : ""}" data-choice="${choice.id}" ${!snapshot.player || answered ? "disabled" : ""}><span>${choice.label}</span><strong>${escapeHtml(choice.text)}</strong></button>`).join("")}</div>
+      ${answered ? `<div class="lockedNote ${answerState}">${feedback?.isCorrect ? "Correct. Answer locked." : "Not quite. Answer locked."}</div>` : ""}
     </div>
   `;
+}
+
+function playerAnswerFeedback(snapshot, question) {
+  if (snapshot.player?.currentAnswer) return snapshot.player.currentAnswer;
+  if (
+    lastAnswerFeedback &&
+    lastAnswerFeedback.sessionId === snapshot.session.id &&
+    lastAnswerFeedback.playerId === snapshot.player?.id &&
+    lastAnswerFeedback.questionId === question.id
+  ) {
+    return lastAnswerFeedback;
+  }
+  return null;
 }
 
 function displayLobby(snapshot) {
@@ -760,6 +775,14 @@ function bindEvents() {
       });
       try {
         const accepted = await api(`/api/sessions/${sessionId}/answers`, { method: "POST", body: JSON.stringify({ playerId: currentPlayerId, choiceId: button.dataset.choice, idempotencyKey: crypto.randomUUID() }) });
+        lastAnswerFeedback = {
+          sessionId,
+          playerId: currentPlayerId,
+          questionId: accepted.answer.questionId,
+          choiceId: accepted.answer.choiceId,
+          isCorrect: accepted.answer.isCorrect
+        };
+        showAnswerFeedback(button, accepted.answer.isCorrect);
         await render(accepted.snapshot);
       } catch (error) {
         showToast(error.message);
@@ -769,6 +792,14 @@ function bindEvents() {
       }
     });
   });
+}
+
+function showAnswerFeedback(button, isCorrect) {
+  button.classList.add(isCorrect ? "correctAnswer" : "wrongAnswer");
+  const note = document.querySelector(".lockedNote") || document.createElement("div");
+  note.className = `lockedNote ${isCorrect ? "correctAnswer" : "wrongAnswer"}`;
+  note.textContent = isCorrect ? "Correct. Answer locked." : "Not quite. Answer locked.";
+  document.querySelector(".playerQuestion")?.appendChild(note);
 }
 
 function readSessionForm() {
