@@ -30,6 +30,7 @@ function cloneQuestionForPlayer(question, reveal = false) {
 }
 
 function defaultConfiguration(input = {}) {
+  const questionSeconds = Number(input.questionSeconds ?? input.timerSeconds ?? 15);
   const winnerRule = configureWinnerRule(input.winnerRule || {
     type: input.winnerMode || "RACE_TO_X",
     targetCorrect: input.targetCorrect,
@@ -41,7 +42,11 @@ function defaultConfiguration(input = {}) {
   return {
     title: input.title || "Family Trivia Night",
     maxPlayers: Number(input.maxPlayers || 200),
-    timerSeconds: Number(input.timerSeconds || 15),
+    timerSeconds: questionSeconds,
+    questionSeconds,
+    revealSeconds: Number(input.revealSeconds ?? 6),
+    autoReveal: Boolean(input.autoReveal),
+    autoAdvanceAfterReveal: Boolean(input.autoAdvanceAfterReveal),
     leaderboardCount: Number(input.leaderboardCount || 10),
     revealAnswer: input.revealAnswer ?? true,
     afterWinner: "PAUSE",
@@ -77,6 +82,7 @@ export class TriviaEngine {
     for (const saved of state.sessions || []) {
       const session = {
         ...saved,
+        configurationSnapshot: defaultConfiguration(saved.configurationSnapshot),
         players: new Map((saved.players || []).map((player) => [player.id, player])),
         answers: new Map((saved.answers || []).map((answer) => [`${answer.questionId}:${answer.playerId}`, answer])),
         idempotencyKeys: new Map(),
@@ -194,6 +200,25 @@ export class TriviaEngine {
     });
   }
 
+  advanceTimers(sessionId) {
+    const session = this.requireSession(sessionId);
+    const config = session.configurationSnapshot;
+    const now = new Date(nowIso(this.clock)).getTime();
+    if (session.status === SessionStatus.QUESTION_ACTIVE && config.autoReveal) {
+      const started = new Date(session.questionActivatedAt || session.updatedAt).getTime();
+      if (secondsElapsed(started, now) >= Math.max(1, Number(config.questionSeconds || config.timerSeconds || 15))) {
+        return this.transition(session, SessionStatus.ANSWER_REVEAL, "QUESTION_AUTO_REVEALED");
+      }
+    }
+    if (session.status === SessionStatus.ANSWER_REVEAL && config.autoAdvanceAfterReveal) {
+      const revealedAt = new Date(session.updatedAt).getTime();
+      if (secondsElapsed(revealedAt, now) >= Math.max(1, Number(config.revealSeconds || 6))) {
+        return this.activateNextQuestion(session);
+      }
+    }
+    return null;
+  }
+
   submitAnswer({ sessionId, playerId, choiceId, idempotencyKey }) {
     const session = this.requireSession(sessionId);
     if (session.status !== SessionStatus.QUESTION_ACTIVE) throw new Error("Question is not accepting answers");
@@ -295,6 +320,10 @@ export class TriviaEngine {
         configuration: {
           maxPlayers: session.configurationSnapshot.maxPlayers,
           timerSeconds: session.configurationSnapshot.timerSeconds,
+          questionSeconds: session.configurationSnapshot.questionSeconds,
+          revealSeconds: session.configurationSnapshot.revealSeconds,
+          autoReveal: session.configurationSnapshot.autoReveal,
+          autoAdvanceAfterReveal: session.configurationSnapshot.autoAdvanceAfterReveal,
           leaderboardCount: session.configurationSnapshot.leaderboardCount,
           categories: session.configurationSnapshot.categories
         },
@@ -315,11 +344,16 @@ export class TriviaEngine {
             lives: player.lives,
             points: player.points,
             currentAnswer: playerAnswer
-              ? { choiceId: playerAnswer.choiceId, isCorrect: reveal ? playerAnswer.isCorrect : undefined, acceptedAt: playerAnswer.acceptedAt }
+              ? { choiceId: playerAnswer.choiceId, isCorrect: playerAnswer.isCorrect, acceptedAt: playerAnswer.acceptedAt }
               : null,
             progress: getRule(session.configurationSnapshot.winnerRule.type).progress(player, session.configurationSnapshot.winnerRule)
           }
         : null
     };
   }
+}
+
+function secondsElapsed(startedAt, now) {
+  if (!Number.isFinite(startedAt) || !Number.isFinite(now)) return 0;
+  return Math.floor((now - startedAt) / 1000);
 }

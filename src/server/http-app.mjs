@@ -80,6 +80,7 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
   if (request.method === "GET" && snapshotMatch) {
     const role = url.searchParams.get("role") || "DISPLAY";
     const playerId = url.searchParams.get("playerId");
+    await advanceTimers({ store, eventHub, sessionId: snapshotMatch[1] });
     sendJson(response, 200, await store.getSnapshot(snapshotMatch[1], role, playerId));
     return;
   }
@@ -143,6 +144,14 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
   }
 
   sendJson(response, 404, { error: "API route not found" });
+}
+
+async function advanceTimers({ store, eventHub, sessionId }) {
+  const advanced = await store.advanceTimers(sessionId);
+  if (!advanced?.advanced) return;
+  const eventType = advanced.eventType || "SESSION_UPDATED";
+  eventHub?.broadcast(sessionId, eventType);
+  await store.publishEvent(sessionId, eventType);
 }
 
 async function serveStatic({ response, pathname, webRoot, coreRoot }) {

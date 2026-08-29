@@ -6,7 +6,18 @@ let displayEditMode = false;
 let displayControlsActive = true;
 let displayControlsTimer = null;
 let displaySettings = { safeArea: 42, scale: 100, vertical: 0, brightness: 100 };
-let sessionForm = { winnerMode: "RACE_TO_X", targetCorrect: 2, requiredStreak: 3, startingLives: 3, questionLimit: 3, advanceCount: 3 };
+let sessionForm = {
+  winnerMode: "RACE_TO_X",
+  targetCorrect: 2,
+  requiredStreak: 3,
+  startingLives: 3,
+  questionLimit: 3,
+  advanceCount: 3,
+  questionSeconds: 15,
+  revealSeconds: 6,
+  autoReveal: false,
+  autoAdvanceAfterReveal: false
+};
 let sessionId = null;
 let joinCode = null;
 let shareOrigin = window.location.origin;
@@ -143,8 +154,13 @@ function operatorView(snapshot) {
           <label class="label">Starting lives<input id="startingLives" type="number" min="1" max="10" value="${sessionForm.startingLives}"></label>
           <label class="label">Question limit<input id="questionLimit" type="number" min="1" max="25" value="${sessionForm.questionLimit}"></label>
           <label class="label">Advance count<input id="advanceCount" type="number" min="1" max="25" value="${sessionForm.advanceCount}"></label>
-          <label class="label">Timer<input id="timer" type="number" min="0" max="120" value="${snapshot.session.configuration.timerSeconds}"></label>
+          <label class="label">Question seconds<input id="questionSeconds" type="number" min="1" max="300" value="${snapshot.session.configuration.questionSeconds}"></label>
+          <label class="label">Reveal seconds<input id="revealSeconds" type="number" min="1" max="300" value="${snapshot.session.configuration.revealSeconds}"></label>
           <label class="label">Max players<input id="maxPlayers" type="number" min="1" max="200" value="${snapshot.session.configuration.maxPlayers}"></label>
+        </div>
+        <div class="timingSettings">
+          <label class="checkRow"><input id="autoReveal" type="checkbox" ${snapshot.session.configuration.autoReveal ? "checked" : ""}><span>Auto reveal when question time ends</span></label>
+          <label class="checkRow"><input id="autoAdvanceAfterReveal" type="checkbox" ${snapshot.session.configuration.autoAdvanceAfterReveal ? "checked" : ""}><span>Auto move on after reveal time</span></label>
         </div>
         <button id="newSession" class="primaryBtn">Create Session</button>
         <div class="joinCard">
@@ -444,13 +460,18 @@ function questionPanel(snapshot, context = "operator") {
 
 function playerQuestion(snapshot, question) {
   const answered = Boolean(snapshot.player?.currentAnswer);
+  const answerState = answered
+    ? snapshot.player.currentAnswer.isCorrect
+      ? "correctAnswer"
+      : "wrongAnswer"
+    : "";
   if (snapshot.session.status !== SessionStatus.QUESTION_ACTIVE) return questionPanel(snapshot, "player");
   return `
     <div class="questionPanel playerQuestion">
       <div class="questionHeader"><span class="categoryPill">${escapeHtml(question.category)}</span><span class="muted">${answered ? "Locked" : "Tap one answer"}</span></div>
       <h1>${escapeHtml(question.prompt)}</h1>
-      <div class="choiceGrid player">${question.choices.map((choice) => `<button class="choiceTile tapChoice ${snapshot.player?.currentAnswer?.choiceId === choice.id ? "selected" : ""}" data-choice="${choice.id}" ${!snapshot.player || answered ? "disabled" : ""}><span>${choice.label}</span><strong>${escapeHtml(choice.text)}</strong></button>`).join("")}</div>
-      ${answered ? "<div class=\"lockedNote\">Answer locked. Watch the reveal.</div>" : ""}
+      <div class="choiceGrid player">${question.choices.map((choice) => `<button class="choiceTile tapChoice ${snapshot.player?.currentAnswer?.choiceId === choice.id ? `selected ${answerState}` : ""}" data-choice="${choice.id}" ${!snapshot.player || answered ? "disabled" : ""}><span>${choice.label}</span><strong>${escapeHtml(choice.text)}</strong></button>`).join("")}</div>
+      ${answered ? `<div class="lockedNote ${answerState}">${snapshot.player.currentAnswer.isCorrect ? "Correct. Answer locked." : "Not quite. Answer locked."}</div>` : ""}
     </div>
   `;
 }
@@ -660,7 +681,11 @@ function bindEvents() {
           startingLives: sessionForm.startingLives,
           questionLimit: sessionForm.questionLimit,
           advanceCount: sessionForm.advanceCount,
-          timerSeconds: Number(document.querySelector("#timer").value),
+          questionSeconds: sessionForm.questionSeconds,
+          revealSeconds: sessionForm.revealSeconds,
+          autoReveal: sessionForm.autoReveal,
+          autoAdvanceAfterReveal: sessionForm.autoAdvanceAfterReveal,
+          timerSeconds: sessionForm.questionSeconds,
           maxPlayers: Number(document.querySelector("#maxPlayers").value)
         })
       });
@@ -753,7 +778,11 @@ function readSessionForm() {
     requiredStreak: Number(document.querySelector("#requiredStreak").value),
     startingLives: Number(document.querySelector("#startingLives").value),
     questionLimit: Number(document.querySelector("#questionLimit").value),
-    advanceCount: Number(document.querySelector("#advanceCount").value)
+    advanceCount: Number(document.querySelector("#advanceCount").value),
+    questionSeconds: Number(document.querySelector("#questionSeconds").value),
+    revealSeconds: Number(document.querySelector("#revealSeconds").value),
+    autoReveal: Boolean(document.querySelector("#autoReveal").checked),
+    autoAdvanceAfterReveal: Boolean(document.querySelector("#autoAdvanceAfterReveal").checked)
   };
 }
 

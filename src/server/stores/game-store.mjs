@@ -15,6 +15,10 @@ export class GameStore {
     throw new Error("GameStore.getSnapshot is not implemented");
   }
 
+  async advanceTimers(sessionId) {
+    return { sessionId, advanced: false, eventType: null };
+  }
+
   async joinSession(joinCode, displayName) {
     throw new Error("GameStore.joinSession is not implemented");
   }

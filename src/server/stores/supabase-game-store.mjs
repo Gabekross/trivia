@@ -47,6 +47,15 @@ export class SupabaseGameStore extends GameStore {
     return this.engine.snapshot(sessionId, role, playerId);
   }
 
+  async advanceTimers(sessionId) {
+    await this.prepare();
+    const session = this.engine.advanceTimers(sessionId);
+    if (!session) return { sessionId, advanced: false, eventType: null };
+    const eventType = session.auditLog.at(-1)?.eventType || "SESSION_UPDATED";
+    await this.persist();
+    return { sessionId, advanced: true, eventType, session };
+  }
+
   async joinSession(joinCode, displayName) {
     await this.prepare();
     const player = this.engine.joinSession(joinCode, displayName);

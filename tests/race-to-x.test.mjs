@@ -14,6 +14,22 @@ test("player payload hides correct answers during active question", () => {
   assert.equal(snapshot.question.choices.some((choice) => choice.isCorrect === true), false);
 });
 
+test("player sees own wrong answer feedback while answer key stays hidden", () => {
+  const engine = new TriviaEngine();
+  const session = engine.createSession({ targetCorrect: 3 });
+  const player = engine.joinSession(session.joinCode, "Avery");
+  engine.operatorAction(session.id, "START");
+  const operator = engine.snapshot(session.id, Role.OPERATOR);
+  const wrongChoice = operator.question.choices.find((choice) => !choice.isCorrect);
+
+  engine.submitAnswer({ sessionId: session.id, playerId: player.id, choiceId: wrongChoice.id, idempotencyKey: "wrong-feedback" });
+  const snapshot = engine.snapshot(session.id, Role.PLAYER, player.id);
+
+  assert.equal(snapshot.session.status, SessionStatus.QUESTION_ACTIVE);
+  assert.equal(snapshot.player.currentAnswer.isCorrect, false);
+  assert.equal(snapshot.question.choices.some((choice) => choice.isCorrect === true), false);
+});
+
 test("operator payload can see answer key", () => {
   const engine = new TriviaEngine();
   const session = engine.createSession({ targetCorrect: 1 });
@@ -84,4 +100,42 @@ test("invalid operator state transition is rejected", () => {
   const engine = new TriviaEngine();
   const session = engine.createSession();
   assert.throws(() => engine.operatorAction(session.id, "REVEAL"), /Invalid session transition/);
+});
+
+test("auto reveal advances active question after configured seconds", () => {
+  class ManualClock extends Date {
+    constructor() {
+      super(ManualClock.now);
+    }
+  }
+  ManualClock.now = Date.parse("2026-08-25T12:00:00Z");
+
+  const engine = new TriviaEngine({ clock: ManualClock });
+  const session = engine.createSession({ autoReveal: true, questionSeconds: 2 });
+  engine.operatorAction(session.id, "START");
+
+  ManualClock.now += 3000;
+  const advanced = engine.advanceTimers(session.id);
+
+  assert.equal(advanced.status, SessionStatus.ANSWER_REVEAL);
+});
+
+test("auto advance starts next question after configured reveal seconds", () => {
+  class ManualClock extends Date {
+    constructor() {
+      super(ManualClock.now);
+    }
+  }
+  ManualClock.now = Date.parse("2026-08-25T12:00:00Z");
+
+  const engine = new TriviaEngine({ clock: ManualClock });
+  const session = engine.createSession({ autoAdvanceAfterReveal: true, revealSeconds: 2 });
+  engine.operatorAction(session.id, "START");
+  engine.operatorAction(session.id, "REVEAL");
+
+  ManualClock.now += 3000;
+  const advanced = engine.advanceTimers(session.id);
+
+  assert.equal(advanced.status, SessionStatus.QUESTION_ACTIVE);
+  assert.equal(advanced.currentQuestionIndex, 1);
 });
