@@ -748,6 +748,11 @@ p {
   box-shadow: 0 28px 80px rgba(17, 24, 39, 0.28);
 }
 
+.joinFrame,
+.gameEndedFrame {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 .phoneTop,
 .playerHud {
   display: flex;
@@ -767,6 +772,68 @@ p {
 .joinPanel,
 .phonePanel {
   padding: 14px;
+}
+
+.joinLanding {
+  min-height: 0;
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.joinIntro {
+  display: grid;
+  gap: 6px;
+  text-align: center;
+}
+
+.joinIntro h1 {
+  color: var(--primary);
+  font-size: clamp(28px, 9vw, 42px);
+  line-height: 0.96;
+}
+
+.joinIntro p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.ruleCard,
+.gameEndedPanel {
+  border: 1px solid rgba(229, 233, 240, 0.92);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow);
+}
+
+.ruleCard {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.ruleCard > strong {
+  color: var(--primary);
+  font-size: 18px;
+  line-height: 1.05;
+  text-align: center;
+}
+
+.ruleSteps {
+  display: grid;
+  gap: 7px;
+}
+
+.ruleSteps span {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 9%, white);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.15;
 }
 
 .playerStage .joinPanel {
@@ -815,6 +882,52 @@ p {
 .phonePanel {
   min-height: 0;
   overflow: hidden;
+}
+
+.gameEndedPanel {
+  min-height: 0;
+  display: grid;
+  align-content: center;
+  gap: 14px;
+  padding: 18px;
+  overflow: hidden;
+  text-align: center;
+}
+
+.gameEndedPanel h1 {
+  color: var(--primary);
+  font-size: clamp(30px, 10vw, 46px);
+  line-height: 0.98;
+}
+
+.gameEndedPanel p {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.endedWinner {
+  display: grid;
+  gap: 2px;
+  padding: 14px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent-3) 18%, white);
+}
+
+.endedWinner span {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.endedWinner strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--primary);
+  font-size: 24px;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .playerQuestion h1 {
@@ -1208,6 +1321,8 @@ body.isFullscreen .displayStage {
 
   .playerHud,
   .joinPanel,
+  .ruleCard,
+  .gameEndedPanel,
   .phonePanel,
   .leaderboardPanel.compact {
     padding: 10px;
@@ -1219,6 +1334,28 @@ body.isFullscreen .displayStage {
 
   .playerName {
     font-size: 20px;
+  }
+
+  .joinLanding {
+    gap: 9px;
+  }
+
+  .joinIntro h1 {
+    font-size: 30px;
+  }
+
+  .joinIntro p,
+  .gameEndedPanel p {
+    font-size: 13px;
+  }
+
+  .ruleSteps {
+    gap: 5px;
+  }
+
+  .ruleSteps span {
+    padding: 7px 8px;
+    font-size: 11px;
   }
 
   .playerHud .miniStats {

@@ -20,6 +20,7 @@ let isRendering = false;
 let pendingRender = false;
 let actionInFlight = false;
 const initialRoute = parseInitialRoute();
+let landingJoinCode = initialRoute.joinCode || null;
 
 const app = document.querySelector("#app");
 
@@ -52,8 +53,10 @@ async function bootstrap() {
 
 function parseInitialRoute() {
   const path = window.location.pathname;
+  const joinMatch = path.match(/^\/trivia\/join\/([^/]+)$/);
+  if (joinMatch) return { tab: "player", joinCode: decodeURIComponent(joinMatch[1]).trim().toUpperCase(), landing: true };
   const sessionMatch = path.match(/^\/trivia\/session\/([^/]+)$/);
-  if (sessionMatch) return { tab: "player", joinCode: decodeURIComponent(sessionMatch[1]).toUpperCase() };
+  if (sessionMatch) return { tab: "player", joinCode: decodeURIComponent(sessionMatch[1]).trim().toUpperCase() };
   const operatorMatch = path.match(/^\/trivia\/operator\/([^/]+)$/);
   if (operatorMatch) return { tab: "operator", sessionId: decodeURIComponent(operatorMatch[1]) };
   const displayMatch = path.match(/^\/trivia\/display\/([^/]+)$/);
@@ -187,6 +190,20 @@ function operatorView(snapshot) {
 
 function playerView(snapshot) {
   const question = snapshot.question;
+  if (snapshot.session.status === SessionStatus.ENDED && (snapshot.player || landingJoinCode)) return playerEndedView(snapshot);
+  if (!snapshot.player) {
+    return `
+      <section class="playerStage">
+        <div class="phoneFrame joinFrame">
+          <div class="phoneTop">
+            <span class="status">${formatStatus(snapshot.session.status)}</span>
+            <strong>${landingJoinCode ? escapeHtml(snapshot.session.title) : "Family Trivia Codex"}</strong>
+          </div>
+          ${joinPanel(snapshot)}
+        </div>
+      </section>
+    `;
+  }
   return `
     <section class="playerStage">
       <div class="phoneFrame">
@@ -194,7 +211,7 @@ function playerView(snapshot) {
           <span class="status">${formatStatus(snapshot.session.status)}</span>
           <strong>${escapeHtml(snapshot.session.title)}</strong>
         </div>
-        ${!snapshot.player ? joinPanel(snapshot) : playerHud(snapshot)}
+        ${playerHud(snapshot)}
         <section class="phonePanel ${snapshot.player?.status === "WINNER" ? "winner" : ""}">
           ${snapshot.player?.status === "WINNER" ? winnerMoment("You won!", "The host has paused the room for your win.") : ""}
           ${snapshot.session.winner && snapshot.player?.status !== "WINNER" ? winnerMoment(`${winnerName(snapshot)} won`, "Stay connected. The host decides what happens next.") : ""}
@@ -256,17 +273,27 @@ function themePicker() {
 }
 
 function joinPanel(snapshot) {
+  const isKnownSession = Boolean(landingJoinCode && snapshot.session?.joinCode);
+  const joinValue = isKnownSession ? snapshot.session.joinCode : "";
   return `
-    <section class="joinPanel stack">
-      <label class="label">Join code<input id="joinCode" value="${snapshot.session.joinCode}"></label>
-      <label class="label">Name<input id="displayName" value="" placeholder="Your name"></label>
-      <button id="join" class="primaryBtn">Join Game</button>
+    <section class="joinLanding">
+      <div class="joinIntro">
+        <span class="eyebrow">${isKnownSession ? "Game Mode" : "Join Game"}</span>
+        <h1>${isKnownSession ? escapeHtml(ruleLabel(snapshot.session.winnerRule)) : "Enter Code"}</h1>
+        <p>${isKnownSession ? escapeHtml(ruleIntro(snapshot.session.winnerRule)) : "Type the code from the host screen to enter the room."}</p>
+      </div>
+      ${isKnownSession ? ruleCard(snapshot.session.winnerRule) : ""}
+      <div class="joinPanel stack">
+        <label class="label">Join code<input id="joinCode" value="${joinValue}" inputmode="text" autocomplete="off"></label>
+        <label class="label">Name<input id="displayName" value="" placeholder="Your name" autocomplete="name"></label>
+        <button id="join" class="primaryBtn">Join Game</button>
+      </div>
     </section>
   `;
 }
 
 function publicLinks(snapshot) {
-  const playerUrl = `${shareOrigin}/trivia/session/${snapshot.session.joinCode}`;
+  const playerUrl = `${shareOrigin}/trivia/join/${snapshot.session.joinCode}`;
   const displayUrl = `${shareOrigin}/trivia/display/${snapshot.session.id}`;
   const operatorUrl = `${shareOrigin}/trivia/operator/${snapshot.session.id}`;
   return `
@@ -334,6 +361,48 @@ function playerHud(snapshot) {
       <strong class="playerName">${escapeHtml(snapshot.player.displayName)}</strong>
       <div class="miniStats">${stat("Correct", snapshot.player.correctCount)}${stat("Streak", snapshot.player.streak)}</div>
       <p class="ruleHud">${playerRuleHud(snapshot.player.progress)}</p>
+    </section>
+  `;
+}
+
+function playerEndedView(snapshot) {
+  return `
+    <section class="playerStage">
+      <div class="phoneFrame gameEndedFrame">
+        <div class="phoneTop">
+          <span class="status">${formatStatus(snapshot.session.status)}</span>
+          <strong>${escapeHtml(snapshot.session.title)}</strong>
+        </div>
+        <section class="gameEndedPanel">
+          <span class="eyebrow">Game Complete</span>
+          <h1>${endedTitle(snapshot)}</h1>
+          <p>${endedMessage(snapshot)}</p>
+          ${snapshot.session.winner ? `<div class="endedWinner"><span>Winner</span><strong>${winnerName(snapshot)}</strong></div>` : ""}
+          <button id="exitPlayer" class="primaryBtn">Exit</button>
+        </section>
+      </div>
+    </section>
+  `;
+}
+
+function endedTitle(snapshot) {
+  if (snapshot.player?.status === "WINNER") return "You won!";
+  if (snapshot.session.winner) return `${winnerName(snapshot)} won`;
+  return "Game ended";
+}
+
+function endedMessage(snapshot) {
+  if (snapshot.player?.status === "WINNER") return "Nice work. The host ended the session, so this room is now closed.";
+  if (snapshot.session.winner) return "The host ended the session. You can exit and join another game when you are ready.";
+  return "The host ended the session. Exit to enter a new join code.";
+}
+
+function ruleCard(rule) {
+  const steps = ruleSteps(rule);
+  return `
+    <section class="ruleCard">
+      <strong>${escapeHtml(ruleSummary(rule))}</strong>
+      <div class="ruleSteps">${steps.map((step) => `<span>${escapeHtml(step)}</span>`).join("")}</div>
     </section>
   `;
 }
@@ -466,6 +535,33 @@ function ruleSummary(rule) {
   return `Race to ${rule.targetCorrect}`;
 }
 
+function ruleLabel(rule) {
+  if (rule.type === "HOT_STREAK") return "Hot Streak";
+  if (rule.type === "THREE_LIVES") return "Three Lives";
+  if (rule.type === "LAST_PLAYER_STANDING") return "Last Player Standing";
+  if (rule.type === "HIGHEST_SCORE") return "Highest Score";
+  if (rule.type === "TOURNAMENT") return "Tournament";
+  return "Race to X";
+}
+
+function ruleIntro(rule) {
+  if (rule.type === "HOT_STREAK") return `Get ${rule.requiredStreak} correct answers in a row before everyone else.`;
+  if (rule.type === "THREE_LIVES") return `You start with ${rule.startingLives} lives. Wrong answers cost a life.`;
+  if (rule.type === "LAST_PLAYER_STANDING") return "One wrong answer knocks you out. Stay alive longer than the room.";
+  if (rule.type === "HIGHEST_SCORE") return `Score the most points across ${rule.questionLimit} questions.`;
+  if (rule.type === "TOURNAMENT") return `Earn a top ${rule.advanceCount} spot after ${rule.questionLimit} questions.`;
+  return `Be first to ${rule.targetCorrect} correct answers. Fast correct answers break ties.`;
+}
+
+function ruleSteps(rule) {
+  if (rule.type === "HOT_STREAK") return ["Correct answers build your streak.", "A wrong answer resets the streak.", "First player to the streak target wins."];
+  if (rule.type === "THREE_LIVES") return ["Everyone starts with lives.", "Wrong answers remove one life.", "Last active player wins."];
+  if (rule.type === "LAST_PLAYER_STANDING") return ["Answer carefully.", "One wrong answer eliminates you.", "Last active player wins."];
+  if (rule.type === "HIGHEST_SCORE") return ["Correct answers score points.", "Every player answers each round.", "Highest score at the limit wins."];
+  if (rule.type === "TOURNAMENT") return ["Correct answers score points.", "Rankings decide who advances.", "Top players continue as finalists."];
+  return ["Answer each question quickly.", "Correct answers move you toward the target.", "First to the target wins."];
+}
+
 function playerRuleHud(progress) {
   if (!progress) return "";
   if (progress.ruleType === "HOT_STREAK") return `${progress.streak}/${progress.requiredStreak} streak`;
@@ -585,6 +681,7 @@ function bindEvents() {
       const joined = await api("/api/join", { method: "POST", body: JSON.stringify({ joinCode: document.querySelector("#joinCode").value.trim(), displayName: document.querySelector("#displayName").value }) });
       sessionId = joined.sessionId;
       currentPlayerId = joined.playerId;
+      landingJoinCode = null;
       storePlayerId(currentPlayerId);
       subscribe();
       updateRoute();
@@ -595,6 +692,18 @@ function bindEvents() {
     } finally {
       actionInFlight = false;
     }
+  });
+  document.querySelector("#exitPlayer")?.addEventListener("click", async () => {
+    currentPlayerId = null;
+    clearStoredPlayerId();
+    activeTab = "player";
+    landingJoinCode = null;
+    window.history.replaceState({}, "", "/trivia");
+    const boot = await api("/api/bootstrap");
+    sessionId = boot.sessionId;
+    joinCode = boot.joinCode;
+    subscribe();
+    await render();
   });
   document.querySelectorAll("[data-choice]").forEach((button) => {
     button.addEventListener("click", async () => {
