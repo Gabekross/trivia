@@ -356,6 +356,41 @@ p {
   padding: 16px;
 }
 
+.qrCard {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.qrCard img {
+  width: 104px;
+  height: 104px;
+  border-radius: 6px;
+  image-rendering: pixelated;
+}
+
+.qrCard div {
+  display: grid;
+  gap: 2px;
+}
+
+.qrCard strong {
+  color: var(--primary);
+  font-size: 15px;
+}
+
+.qrCard span {
+  color: var(--accent);
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .linkRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

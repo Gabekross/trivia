@@ -13,6 +13,9 @@ let shareOrigin = window.location.origin;
 let currentPlayerId = null;
 let eventStream = null;
 let pollingTimer = null;
+let realtimeClient = null;
+let realtimeChannel = null;
+let realtimeConnected = false;
 let isRendering = false;
 let pendingRender = false;
 const initialRoute = parseInitialRoute();
@@ -261,11 +264,19 @@ function publicLinks(snapshot) {
   return `
     <section class="linkPanel">
       <div class="sectionHeader inline"><span class="eyebrow">Share URLs</span><h2>Live Links</h2></div>
+      <div class="qrCard">
+        <img src="${qrUrl(playerUrl)}" alt="QR code for player join link">
+        <div><strong>Scan To Join</strong><span>${snapshot.session.joinCode}</span></div>
+      </div>
       ${linkRow("Player", playerUrl)}
       ${linkRow("Display", displayUrl)}
       ${linkRow("Operator", operatorUrl)}
     </section>
   `;
+}
+
+function qrUrl(url) {
+  return `/api/qr?data=${encodeURIComponent(url)}`;
 }
 
 function linkRow(label, url) {
@@ -586,6 +597,7 @@ function readSessionForm() {
 
 function subscribe() {
   eventStream?.close();
+  removeRealtimeChannel();
   clearInterval(pollingTimer);
   eventStream = new EventSource(`/api/sessions/${sessionId}/events`);
   eventStream.addEventListener("update", () => render());
@@ -593,9 +605,44 @@ function subscribe() {
     eventStream?.close();
     eventStream = null;
   });
+  subscribeRealtime();
   pollingTimer = setInterval(() => {
     if (document.visibilityState === "visible") render();
   }, pollInterval());
+}
+
+async function subscribeRealtime() {
+  realtimeConnected = false;
+  if (!window.supabase) return;
+  try {
+    const config = await api("/api/client-config");
+    if (!config.realtime || !config.supabaseUrl || !config.supabaseAnonKey) return;
+    realtimeClient ||= window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+    realtimeChannel = realtimeClient
+      .channel(`game-updates-${sessionId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "game_update_events",
+          filter: `session_id=eq.${sessionId}`
+        },
+        () => render()
+      )
+      .subscribe((status) => {
+        realtimeConnected = status === "SUBSCRIBED";
+      });
+  } catch {
+    realtimeConnected = false;
+  }
+}
+
+function removeRealtimeChannel() {
+  if (!realtimeClient || !realtimeChannel) return;
+  realtimeClient.removeChannel(realtimeChannel);
+  realtimeChannel = null;
+  realtimeConnected = false;
 }
 
 function updateRoute() {
@@ -640,6 +687,7 @@ function hasEditableFocus() {
 }
 
 function pollInterval() {
+  if (realtimeConnected) return 10000;
   if (activeTab === "display") return 900;
   if (activeTab === "player") return 1100;
   return 1800;

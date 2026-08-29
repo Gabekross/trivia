@@ -118,6 +118,19 @@ export class SupabaseGameStore extends GameStore {
     });
   }
 
+  async publishEvent(sessionId, eventType) {
+    await this.request("/rest/v1/game_update_events", {
+      method: "POST",
+      headers: { prefer: "return=minimal" },
+      body: {
+        session_id: sessionId,
+        event_type: eventType,
+        created_at: new Date().toISOString()
+      }
+    });
+    return { sessionId, eventType, published: true };
+  }
+
   async request(path, { method, headers = {}, body } = {}) {
     this.assertConfigured();
     const response = await this.fetch(`${this.supabaseUrl}${path}`, {

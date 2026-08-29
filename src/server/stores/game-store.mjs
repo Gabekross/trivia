@@ -26,4 +26,8 @@ export class GameStore {
   async submitAnswer({ sessionId, playerId, choiceId, idempotencyKey }) {
     throw new Error("GameStore.submitAnswer is not implemented");
   }
+
+  async publishEvent(sessionId, eventType) {
+    return { sessionId, eventType, published: false };
+  }
 }

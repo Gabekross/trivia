@@ -49,6 +49,9 @@ test("SupabaseGameStore persists through Supabase REST", async () => {
     if (url.includes("/rest/v1/game_session_index") && options.method === "POST") {
       return emptyResponse();
     }
+    if (url.includes("/rest/v1/game_update_events") && options.method === "POST") {
+      return emptyResponse();
+    }
     return textResponse(404, "not found");
   };
 
@@ -64,12 +67,14 @@ test("SupabaseGameStore persists through Supabase REST", async () => {
   const operator = await store.getSnapshot(boot.sessionId, "OPERATOR");
   const correct = operator.question.choices.find((choice) => choice.isCorrect);
   await store.submitAnswer({ sessionId: boot.sessionId, playerId: joined.playerId, choiceId: correct.id, idempotencyKey: "supabase-answer" });
+  await store.publishEvent(boot.sessionId, "ANSWER_ACCEPTED");
   const player = await store.getSnapshot(boot.sessionId, "PLAYER", joined.playerId);
 
   assert.equal(player.session.title, "Supabase Store Test");
   assert.equal(player.player.currentAnswer.choiceId, correct.id);
   assert.equal(state.sessions.length, 1);
   assert.ok(calls.some((call) => call.url.includes("/rest/v1/game_session_index")));
+  assert.ok(calls.some((call) => call.url.includes("/rest/v1/game_update_events")));
 });
 
 function jsonResponse(body) {

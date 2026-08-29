@@ -7,12 +7,19 @@ test("Vercel entrypoint uses the shared HTTP app", async () => {
   const config = JSON.parse(await readFile("vercel.json", "utf8"));
   const appSource = await readFile("src/server/http-app.mjs", "utf8");
   const clientSource = await readFile("src/web/app.mjs", "utf8");
+  const html = await readFile("src/web/index.html", "utf8");
 
   assert.match(entrypoint, /createHttpApp/);
   assert.match(entrypoint, /export default async function handler/);
   assert.equal(config.outputDirectory, "public");
   assert.deepEqual(config.rewrites, [{ source: "/(.*)", destination: "/api/index.mjs" }]);
   assert.match(appSource, /polling: true/);
+  assert.match(appSource, /api\/client-config/);
+  assert.match(appSource, /api\/qr/);
+  assert.match(html, /supabase-js@2/);
+  assert.match(clientSource, /postgres_changes/);
+  assert.match(clientSource, /game_update_events/);
+  assert.match(clientSource, /\/api\/qr\?data=/);
   assert.match(clientSource, /setInterval/);
   assert.match(clientSource, /hasEditableFocus/);
   assert.match(clientSource, /focusout/);

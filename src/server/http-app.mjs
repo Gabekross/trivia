@@ -39,6 +39,26 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
     return;
   }
 
+  if (request.method === "GET" && url.pathname === "/api/client-config") {
+    sendJson(response, 200, {
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || null,
+      supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || null,
+      realtime: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+    });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/qr") {
+    const data = url.searchParams.get("data") || "";
+    if (!data || data.length > 512) {
+      sendJson(response, 400, { error: "QR data is required and must be 512 characters or fewer." });
+      return;
+    }
+    const svg = await createQrSvg(data);
+    send(response, 200, "image/svg+xml; charset=utf-8", svg);
+    return;
+  }
+
   if (request.method === "GET" && url.pathname === "/api/bootstrap") {
     const session = await store.bootstrap();
     sendJson(response, 200, { ...session, origins: getOrigins?.(request) || defaultOrigins(request) });
@@ -77,6 +97,7 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
   if (request.method === "POST" && url.pathname === "/api/sessions") {
     const created = await store.createSession(await readJson(request));
     eventHub?.broadcast(created.sessionId, "SESSION_CREATED");
+    await store.publishEvent(created.sessionId, "SESSION_CREATED");
     sendJson(response, 201, {
       sessionId: created.sessionId,
       joinCode: created.joinCode,
@@ -89,6 +110,7 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
     const body = await readJson(request);
     const joined = await store.joinSession(body.joinCode, body.displayName);
     eventHub?.broadcast(joined.sessionId, "PLAYER_JOINED");
+    await store.publishEvent(joined.sessionId, "PLAYER_JOINED");
     sendJson(response, 201, {
       sessionId: joined.sessionId,
       playerId: joined.playerId,
@@ -102,6 +124,7 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
     const body = await readJson(request);
     const updated = await store.operatorAction(operatorMatch[1], body.action);
     eventHub?.broadcast(updated.session.id, body.action);
+    await store.publishEvent(updated.session.id, body.action);
     sendJson(response, 200, { ok: true, snapshot: await store.getSnapshot(updated.session.id, "OPERATOR") });
     return;
   }
@@ -111,6 +134,7 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
     const body = await readJson(request);
     const { answer } = await store.submitAnswer({ sessionId: answerMatch[1], playerId: body.playerId, choiceId: body.choiceId, idempotencyKey: body.idempotencyKey });
     eventHub?.broadcast(answerMatch[1], "ANSWER_ACCEPTED");
+    await store.publishEvent(answerMatch[1], "ANSWER_ACCEPTED");
     sendJson(response, 201, {
       answer,
       snapshot: await store.getSnapshot(answerMatch[1], "PLAYER", body.playerId)
@@ -156,4 +180,17 @@ function send(response, status, contentType, body) {
 function defaultOrigins(request) {
   const current = `http://${request.headers.host}`;
   return { current, lan: current };
+}
+
+async function createQrSvg(data) {
+  const { default: QRCode } = await import("qrcode");
+  return QRCode.toString(data, {
+    type: "svg",
+    margin: 1,
+    width: 220,
+    color: {
+      dark: "#1f2933",
+      light: "#ffffff"
+    }
+  });
 }

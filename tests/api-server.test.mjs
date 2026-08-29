@@ -10,7 +10,7 @@ const baseUrl = `http://127.0.0.1:${port}`;
 test("dev server exposes trusted mutation API with persistence", async () => {
   await rm("data", { recursive: true, force: true });
   const server = spawn(process.execPath, ["scripts/dev-server.mjs"], {
-    env: { ...process.env, GAME_STORE: "json", PORT: String(port) },
+    env: { ...process.env, GAME_STORE: "json", NEXT_PUBLIC_SUPABASE_URL: "", NEXT_PUBLIC_SUPABASE_ANON_KEY: "", SUPABASE_SERVICE_ROLE_KEY: "", PORT: String(port) },
     stdio: ["ignore", "pipe", "pipe"]
   });
   try {
@@ -24,6 +24,7 @@ test("dev server exposes trusted mutation API with persistence", async () => {
       body: JSON.stringify({ joinCode: created.joinCode, displayName: "API Player" })
     });
     const health = await api("/api/health");
+    const clientConfig = await api("/api/client-config");
     const bootstrap = await api("/api/bootstrap");
     const started = await api(`/api/sessions/${created.sessionId}/operator`, { method: "POST", body: JSON.stringify({ action: "START" }) });
     const operator = await api(`/api/sessions/${created.sessionId}/snapshot?role=OPERATOR`);
@@ -35,6 +36,8 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     });
     const player = await api(`/api/sessions/${created.sessionId}/snapshot?role=PLAYER&playerId=${joined.playerId}`);
     const byCode = await api(`/api/join-codes/${created.joinCode}`);
+    const qr = await fetch(`${baseUrl}/api/qr?data=${encodeURIComponent(`${baseUrl}/trivia/session/${created.joinCode}`)}`);
+    const qrSvg = await qr.text();
     const displayRoute = await fetch(`${baseUrl}/trivia/display/${created.sessionId}`);
     const displayHtml = await displayRoute.text();
 
@@ -46,7 +49,10 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     assert.equal(accepted.snapshot.player.currentAnswer.choiceId, correct.id);
     assert.equal(health.ok, true);
     assert.equal(health.store, "json");
+    assert.equal(clientConfig.realtime, false);
     assert.equal(byCode.sessionId, created.sessionId);
+    assert.equal(qr.status, 200);
+    assert.match(qrSvg, /<svg/);
     assert.equal(typeof bootstrap.origins.current, "string");
     assert.equal(displayRoute.status, 200);
     assert.match(displayHtml, /Family Trivia Codex/);

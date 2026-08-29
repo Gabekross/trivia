@@ -1,6 +1,6 @@
 # Family Trivia Codex
 
-Phase 0/1 foundation for a live audience trivia platform. The app is intentionally self-contained for the first execution pass: it uses no downloaded packages, runs in a browser from a tiny Node static server, and keeps the game engine server-authoritative in shared modules that can later sit behind Next.js route handlers and Supabase RPC calls.
+Phase 0/1 foundation for a live audience trivia platform. The app runs in a browser from a tiny Node static server locally, deploys through a Vercel serverless entrypoint, and keeps the game engine server-authoritative behind shared API handlers.
 
 ## What Is Included
 
@@ -15,6 +15,8 @@ Phase 0/1 foundation for a live audience trivia platform. The app is intentional
 - Store adapter boundary with a working JSON store and a Supabase REST adapter for the deployment path.
 - Shared HTTP runtime used by both the local Node server and the Vercel serverless entrypoint.
 - JSON persistence in `data/trivia-state.json` plus server-sent events so connected clients can refresh from authoritative state.
+- Supabase Realtime event signaling for deployed player/display/operator sync, with light polling as a fallback.
+- Operator QR code generation for the current player join link.
 - Supabase migration draft with tables, indexes, RLS posture, and atomic uniqueness constraints.
 - Automated tests for state transitions, answer uniqueness, authorization boundaries, and Race-to-X tie behavior.
 - Reproducible load-test harness for 50/100/200 simulated players.
@@ -43,12 +45,14 @@ Set `GAME_STORE=json` for the default local implementation. This stores the auth
 
 Set `GAME_STORE=supabase` when running in a trusted server environment such as Vercel route handlers. The Supabase adapter uses the service role key from the server only and persists the same authoritative engine snapshot through Supabase REST.
 
-Apply both migrations before selecting the Supabase store:
+Apply all migrations before selecting the Supabase store:
 
 - `supabase/migrations/0001_phase0_phase1_foundation.sql`
 - `supabase/migrations/0002_engine_snapshot_store.sql`
+- `supabase/migrations/0003_realtime_update_events.sql`
+- `supabase/migrations/0004_realtime_event_grants.sql`
 
-The snapshot store is the first deployable persistence path. The normalized Phase 1 tables remain available for later content management, analytics, and richer audit/event reporting.
+The snapshot store is the first deployable persistence path. The normalized Phase 1 tables remain available for later content management, analytics, and richer audit/event reporting. Realtime uses tiny insert-only rows in `game_update_events` so browsers know when to refresh their role-specific snapshot.
 
 ## Deployment Readiness
 
@@ -56,6 +60,7 @@ Before a public Vercel deploy:
 
 - Create the Supabase project and run the migrations.
 - Add `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` as server-side Vercel environment variables.
+- Add `NEXT_PUBLIC_SUPABASE_ANON_KEY` so deployed browsers can subscribe to Supabase Realtime.
 - Set `GAME_STORE=supabase` in the deployed server environment.
 - Run `npm run deploy:check` after setting deployment environment variables.
 - Keep `SUPABASE_SERVICE_ROLE_KEY` out of browser code and public client config.
@@ -71,7 +76,7 @@ The production entrypoint is `api/index.mjs`. `vercel.json` rewrites all app, as
 - `/trivia/operator/:sessionId`
 - `/api/*`
 
-The local dev server and Vercel entrypoint both use `src/server/http-app.mjs`, so route behavior stays aligned. Local dev also keeps server-sent events for fast updates. The browser includes polling as a fallback so deployed/serverless clients continue refreshing even when long-lived event streams are unavailable.
+The local dev server and Vercel entrypoint both use `src/server/http-app.mjs`, so route behavior stays aligned. Local dev also keeps server-sent events for fast updates. Deployed clients subscribe to Supabase Realtime through the public anon key and keep light polling as a fallback.
 
 ## Verification
 
