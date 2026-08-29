@@ -25,11 +25,11 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     });
     const health = await api("/api/health");
     const bootstrap = await api("/api/bootstrap");
-    await api(`/api/sessions/${created.sessionId}/operator`, { method: "POST", body: JSON.stringify({ action: "START" }) });
+    const started = await api(`/api/sessions/${created.sessionId}/operator`, { method: "POST", body: JSON.stringify({ action: "START" }) });
     const operator = await api(`/api/sessions/${created.sessionId}/snapshot?role=OPERATOR`);
     const correct = operator.question.choices.find((choice) => choice.isCorrect);
 
-    await api(`/api/sessions/${created.sessionId}/answers`, {
+    const accepted = await api(`/api/sessions/${created.sessionId}/answers`, {
       method: "POST",
       body: JSON.stringify({ playerId: joined.playerId, choiceId: correct.id, idempotencyKey: "api-answer" })
     });
@@ -40,6 +40,10 @@ test("dev server exposes trusted mutation API with persistence", async () => {
 
     assert.equal(player.session.winner.playerId, joined.playerId);
     assert.equal(player.player.currentAnswer.choiceId, correct.id);
+    assert.equal(created.snapshot.session.id, created.sessionId);
+    assert.equal(joined.snapshot.player.id, joined.playerId);
+    assert.equal(started.snapshot.session.status, "QUESTION_ACTIVE");
+    assert.equal(accepted.snapshot.player.currentAnswer.choiceId, correct.id);
     assert.equal(health.ok, true);
     assert.equal(health.store, "json");
     assert.equal(byCode.sessionId, created.sessionId);

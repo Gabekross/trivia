@@ -20,7 +20,7 @@ export class SupabaseGameStore extends GameStore {
   }
 
   async bootstrap() {
-    await this.ready;
+    await this.prepare();
     let session = [...this.engine.sessions.values()].at(-1);
     if (!session) {
       session = this.engine.createSession(this.defaultSessionConfig);
@@ -30,25 +30,25 @@ export class SupabaseGameStore extends GameStore {
   }
 
   async createSession(config = {}) {
-    await this.ready;
+    await this.prepare();
     const session = this.engine.createSession(config);
     await this.persist();
     return { sessionId: session.id, joinCode: session.joinCode, session };
   }
 
   async findSessionByJoinCode(joinCode) {
-    await this.ready;
+    await this.prepare();
     const session = this.engine.findSessionByJoinCode(joinCode);
     return session ? { sessionId: session.id, joinCode: session.joinCode, session } : null;
   }
 
   async getSnapshot(sessionId, role, playerId = null) {
-    await this.ready;
+    await this.prepare();
     return this.engine.snapshot(sessionId, role, playerId);
   }
 
   async joinSession(joinCode, displayName) {
-    await this.ready;
+    await this.prepare();
     const player = this.engine.joinSession(joinCode, displayName);
     const session = this.engine.findSessionByJoinCode(joinCode);
     await this.persist();
@@ -56,20 +56,29 @@ export class SupabaseGameStore extends GameStore {
   }
 
   async operatorAction(sessionId, action) {
-    await this.ready;
+    await this.prepare();
     const session = this.engine.operatorAction(sessionId, action);
     await this.persist();
     return { session };
   }
 
   async submitAnswer({ sessionId, playerId, choiceId, idempotencyKey }) {
-    await this.ready;
+    await this.prepare();
     const answer = this.engine.submitAnswer({ sessionId, playerId, choiceId, idempotencyKey });
     await this.persist();
     return { answer, session: this.engine.requireSession(sessionId) };
   }
 
   async load() {
+    await this.loadRemoteState();
+  }
+
+  async prepare() {
+    await this.ready;
+    await this.loadRemoteState();
+  }
+
+  async loadRemoteState() {
     this.assertConfigured();
     const rows = await this.request(`/rest/v1/game_state_snapshots?id=eq.${encodeURIComponent(this.snapshotId)}&select=state`, {
       method: "GET"

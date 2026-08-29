@@ -14,6 +14,7 @@ let currentPlayerId = null;
 let eventStream = null;
 let pollingTimer = null;
 let isRendering = false;
+let pendingRender = false;
 const initialRoute = parseInitialRoute();
 
 const app = document.querySelector("#app");
@@ -50,11 +51,14 @@ function parseInitialRoute() {
   return { tab: "operator" };
 }
 
-async function render() {
-  if (isRendering) return;
+async function render(snapshotOverride = null) {
+  if (isRendering) {
+    pendingRender = true;
+    return;
+  }
   isRendering = true;
   try {
-    const snapshot = await snapshotForActiveTab();
+    const snapshot = snapshotOverride || await snapshotForActiveTab();
     joinCode = snapshot.session.joinCode;
     app.innerHTML = `
       <div class="shell theme-${activeTheme}">
@@ -74,6 +78,12 @@ async function render() {
     bindEvents();
   } finally {
     isRendering = false;
+    if (pendingRender && !snapshotOverride) {
+      pendingRender = false;
+      await render();
+    } else {
+      pendingRender = false;
+    }
   }
 }
 
@@ -474,48 +484,78 @@ function bindEvents() {
     });
   });
   document.querySelector("#newSession")?.addEventListener("click", async () => {
+    const button = document.querySelector("#newSession");
+    setBusy(button, "Creating");
     sessionForm = readSessionForm();
-    const created = await api("/api/sessions", {
-      method: "POST",
-      body: JSON.stringify({
-        title: document.querySelector("#title").value,
-        winnerMode: sessionForm.winnerMode,
-        targetCorrect: sessionForm.targetCorrect,
-        requiredStreak: sessionForm.requiredStreak,
-        startingLives: sessionForm.startingLives,
-        questionLimit: sessionForm.questionLimit,
-        advanceCount: sessionForm.advanceCount,
-        timerSeconds: Number(document.querySelector("#timer").value),
-        maxPlayers: Number(document.querySelector("#maxPlayers").value)
-      })
-    });
-    sessionId = created.sessionId;
-    joinCode = created.joinCode;
-    currentPlayerId = null;
-    clearStoredPlayerId();
-    subscribe();
-    updateRoute();
-    await render();
+    try {
+      const created = await api("/api/sessions", {
+        method: "POST",
+        body: JSON.stringify({
+          title: document.querySelector("#title").value,
+          winnerMode: sessionForm.winnerMode,
+          targetCorrect: sessionForm.targetCorrect,
+          requiredStreak: sessionForm.requiredStreak,
+          startingLives: sessionForm.startingLives,
+          questionLimit: sessionForm.questionLimit,
+          advanceCount: sessionForm.advanceCount,
+          timerSeconds: Number(document.querySelector("#timer").value),
+          maxPlayers: Number(document.querySelector("#maxPlayers").value)
+        })
+      });
+      sessionId = created.sessionId;
+      joinCode = created.joinCode;
+      currentPlayerId = null;
+      clearStoredPlayerId();
+      subscribe();
+      updateRoute();
+      await render(created.snapshot);
+    } catch (error) {
+      showToast(error.message);
+      setBusy(button, "Create Session", false);
+    }
   });
   document.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", async () => {
-      await api(`/api/sessions/${sessionId}/operator`, { method: "POST", body: JSON.stringify({ action: button.dataset.action }) });
-      await render();
+      const original = button.textContent;
+      setBusy(button, "Working");
+      try {
+        const updated = await api(`/api/sessions/${sessionId}/operator`, { method: "POST", body: JSON.stringify({ action: button.dataset.action }) });
+        await render(updated.snapshot);
+      } catch (error) {
+        showToast(error.message);
+        setBusy(button, original, false);
+      }
     });
   });
   document.querySelector("#join")?.addEventListener("click", async () => {
-    const joined = await api("/api/join", { method: "POST", body: JSON.stringify({ joinCode: document.querySelector("#joinCode").value, displayName: document.querySelector("#displayName").value }) });
-    sessionId = joined.sessionId;
-    currentPlayerId = joined.playerId;
-    storePlayerId(currentPlayerId);
-    subscribe();
-    updateRoute();
-    await render();
+    const button = document.querySelector("#join");
+    setBusy(button, "Joining");
+    try {
+      const joined = await api("/api/join", { method: "POST", body: JSON.stringify({ joinCode: document.querySelector("#joinCode").value, displayName: document.querySelector("#displayName").value }) });
+      sessionId = joined.sessionId;
+      currentPlayerId = joined.playerId;
+      storePlayerId(currentPlayerId);
+      subscribe();
+      updateRoute();
+      await render(joined.snapshot);
+    } catch (error) {
+      showToast(error.message);
+      setBusy(button, "Join Game", false);
+    }
   });
   document.querySelectorAll("[data-choice]").forEach((button) => {
     button.addEventListener("click", async () => {
-      await api(`/api/sessions/${sessionId}/answers`, { method: "POST", body: JSON.stringify({ playerId: currentPlayerId, choiceId: button.dataset.choice, idempotencyKey: crypto.randomUUID() }) });
-      await render();
+      document.querySelectorAll("[data-choice]").forEach((choice) => {
+        choice.disabled = true;
+        choice.classList.toggle("selected", choice === button);
+      });
+      try {
+        const accepted = await api(`/api/sessions/${sessionId}/answers`, { method: "POST", body: JSON.stringify({ playerId: currentPlayerId, choiceId: button.dataset.choice, idempotencyKey: crypto.randomUUID() }) });
+        await render(accepted.snapshot);
+      } catch (error) {
+        showToast(error.message);
+        await render();
+      }
     });
   });
 }
@@ -542,7 +582,7 @@ function subscribe() {
   });
   pollingTimer = setInterval(() => {
     if (document.visibilityState === "visible") render();
-  }, 1500);
+  }, 700);
 }
 
 function updateRoute() {
@@ -563,6 +603,21 @@ async function api(path, options = {}) {
   const body = await response.json();
   if (!response.ok) throw new Error(body.error || "Request failed");
   return body;
+}
+
+function setBusy(button, label, busy = true) {
+  if (!button) return;
+  button.disabled = busy;
+  button.textContent = busy ? label : label;
+  button.classList.toggle("busy", busy);
+}
+
+function showToast(message) {
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2800);
 }
 
 function showDisplayControls() {

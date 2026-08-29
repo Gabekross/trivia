@@ -77,7 +77,11 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
   if (request.method === "POST" && url.pathname === "/api/sessions") {
     const created = await store.createSession(await readJson(request));
     eventHub?.broadcast(created.sessionId, "SESSION_CREATED");
-    sendJson(response, 201, { sessionId: created.sessionId, joinCode: created.joinCode });
+    sendJson(response, 201, {
+      sessionId: created.sessionId,
+      joinCode: created.joinCode,
+      snapshot: await store.getSnapshot(created.sessionId, "OPERATOR")
+    });
     return;
   }
 
@@ -85,7 +89,11 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
     const body = await readJson(request);
     const joined = await store.joinSession(body.joinCode, body.displayName);
     eventHub?.broadcast(joined.sessionId, "PLAYER_JOINED");
-    sendJson(response, 201, { sessionId: joined.sessionId, playerId: joined.playerId });
+    sendJson(response, 201, {
+      sessionId: joined.sessionId,
+      playerId: joined.playerId,
+      snapshot: await store.getSnapshot(joined.sessionId, "PLAYER", joined.playerId)
+    });
     return;
   }
 
@@ -94,7 +102,7 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
     const body = await readJson(request);
     const updated = await store.operatorAction(operatorMatch[1], body.action);
     eventHub?.broadcast(updated.session.id, body.action);
-    sendJson(response, 200, { ok: true });
+    sendJson(response, 200, { ok: true, snapshot: await store.getSnapshot(updated.session.id, "OPERATOR") });
     return;
   }
 
@@ -103,7 +111,10 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
     const body = await readJson(request);
     const { answer } = await store.submitAnswer({ sessionId: answerMatch[1], playerId: body.playerId, choiceId: body.choiceId, idempotencyKey: body.idempotencyKey });
     eventHub?.broadcast(answerMatch[1], "ANSWER_ACCEPTED");
-    sendJson(response, 201, { answer });
+    sendJson(response, 201, {
+      answer,
+      snapshot: await store.getSnapshot(answerMatch[1], "PLAYER", body.playerId)
+    });
     return;
   }
 

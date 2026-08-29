@@ -47,6 +47,11 @@ button:disabled {
   opacity: 0.48;
 }
 
+button.busy {
+  position: relative;
+  opacity: 0.74;
+}
+
 input,
 select {
   width: 100%;
@@ -739,6 +744,24 @@ p {
   background: color-mix(in srgb, var(--accent-3) 18%, white);
   color: color-mix(in srgb, var(--accent-3) 60%, black);
   font-weight: 800;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  z-index: 80;
+  width: min(420px, calc(100vw - 28px));
+  transform: translateX(-50%);
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--danger) 42%, white);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--danger);
+  box-shadow: var(--shadow-lift);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
 }
 
 .waitingPanel,
