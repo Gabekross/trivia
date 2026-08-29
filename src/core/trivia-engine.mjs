@@ -344,7 +344,7 @@ export class TriviaEngine {
             lives: player.lives,
             points: player.points,
             currentAnswer: playerAnswer
-              ? { choiceId: playerAnswer.choiceId, isCorrect: playerAnswer.isCorrect, acceptedAt: playerAnswer.acceptedAt }
+              ? { choiceId: playerAnswer.choiceId, isCorrect: reveal ? playerAnswer.isCorrect : undefined, acceptedAt: playerAnswer.acceptedAt }
               : null,
             progress: getRule(session.configurationSnapshot.winnerRule.type).progress(player, session.configurationSnapshot.winnerRule)
           }

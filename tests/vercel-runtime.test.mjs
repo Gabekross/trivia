@@ -44,7 +44,5 @@ test("Vercel entrypoint uses the shared HTTP app", async () => {
   assert.match(clientSource, /revealSeconds/);
   assert.match(clientSource, /correctAnswer/);
   assert.match(clientSource, /wrongAnswer/);
-  assert.match(clientSource, /lastAnswerFeedback/);
-  assert.match(clientSource, /showAnswerFeedback/);
-  assert.match(clientSource, /accepted\.answer\.isCorrect/);
+  assert.match(clientSource, /hasRevealFeedback/);
 });

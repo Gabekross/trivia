@@ -14,7 +14,7 @@ test("player payload hides correct answers during active question", () => {
   assert.equal(snapshot.question.choices.some((choice) => choice.isCorrect === true), false);
 });
 
-test("player sees own wrong answer feedback while answer key stays hidden", () => {
+test("player sees wrong answer feedback only after reveal", () => {
   const engine = new TriviaEngine();
   const session = engine.createSession({ targetCorrect: 3 });
   const player = engine.joinSession(session.joinCode, "Avery");
@@ -23,11 +23,17 @@ test("player sees own wrong answer feedback while answer key stays hidden", () =
   const wrongChoice = operator.question.choices.find((choice) => !choice.isCorrect);
 
   engine.submitAnswer({ sessionId: session.id, playerId: player.id, choiceId: wrongChoice.id, idempotencyKey: "wrong-feedback" });
-  const snapshot = engine.snapshot(session.id, Role.PLAYER, player.id);
+  const activeSnapshot = engine.snapshot(session.id, Role.PLAYER, player.id);
 
-  assert.equal(snapshot.session.status, SessionStatus.QUESTION_ACTIVE);
-  assert.equal(snapshot.player.currentAnswer.isCorrect, false);
-  assert.equal(snapshot.question.choices.some((choice) => choice.isCorrect === true), false);
+  assert.equal(activeSnapshot.session.status, SessionStatus.QUESTION_ACTIVE);
+  assert.equal(activeSnapshot.player.currentAnswer.choiceId, wrongChoice.id);
+  assert.equal(activeSnapshot.player.currentAnswer.isCorrect, undefined);
+  assert.equal(activeSnapshot.question.choices.some((choice) => choice.isCorrect === true), false);
+
+  engine.operatorAction(session.id, "REVEAL");
+  const revealSnapshot = engine.snapshot(session.id, Role.PLAYER, player.id);
+  assert.equal(revealSnapshot.player.currentAnswer.isCorrect, false);
+  assert.equal(revealSnapshot.question.choices.some((choice) => choice.isCorrect === true), true);
 });
 
 test("operator payload can see answer key", () => {
