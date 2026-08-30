@@ -124,6 +124,83 @@ function normalizedText(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(number)));
+}
+
+const generationPresets = {
+  FAMILY: {
+    label: "Family Night",
+    stems: [
+      "Which answer best matches the family story about {topic}?",
+      "What would be the funniest family-trivia clue for {topic}?",
+      "Which detail would most likely be remembered from {topic}?"
+    ],
+    correct: ["The shared family memory", "The person who told the story", "The detail everyone remembers"],
+    distractors: ["A random guess", "A different holiday", "Something from a movie", "A made-up nickname"]
+  },
+  COUPLES: {
+    label: "Couples Night",
+    stems: [
+      "Which answer would test how well partners know each other about {topic}?",
+      "What question should a couple answer about {topic}?",
+      "Which clue best fits a couples round about {topic}?"
+    ],
+    correct: ["The answer both partners agree on", "The partner's real preference", "The shared inside story"],
+    distractors: ["A popular guess", "A totally opposite preference", "A TV-show answer", "A vacation rumor"]
+  },
+  GENERAL: {
+    label: "General Trivia",
+    stems: [
+      "Which fact is most connected to {topic}?",
+      "What should players know about {topic}?",
+      "Which clue best points to {topic}?"
+    ],
+    correct: ["The verified fact", "The clearest match", "The correct trivia clue"],
+    distractors: ["A close-sounding answer", "An unrelated option", "A common mix-up", "A playful decoy"]
+  }
+};
+
+function generatedDraftInputs(input = {}) {
+  const presetKey = String(input.preset || "FAMILY").toUpperCase();
+  const preset = generationPresets[presetKey] || generationPresets.FAMILY;
+  const topic = String(input.topic || "family memories").replace(/\s+/g, " ").trim().slice(0, 80) || "family memories";
+  const category = String(input.category || preset.label).replace(/\s+/g, " ").trim() || preset.label;
+  const difficulty = String(input.difficulty || "easy").toLowerCase();
+  const count = clampNumber(input.count, 1, 8, 4);
+  const notes = String(input.notes || "").replace(/\s+/g, " ").trim().slice(0, 240);
+  return { presetKey, preset, topic, category, difficulty, count, notes };
+}
+
+function draftQuestionFromTemplate({ presetKey, preset, topic, category, difficulty, notes, generatedAt }, index) {
+  const stem = preset.stems[index % preset.stems.length].replace("{topic}", topic);
+  const correct = preset.correct[index % preset.correct.length];
+  const distractors = preset.distractors.slice(index % preset.distractors.length).concat(preset.distractors.slice(0, index % preset.distractors.length));
+  return {
+    category,
+    difficulty,
+    prompt: `${stem} (${index + 1})?`,
+    explanation: notes ? `Draft generated from host notes: ${notes}` : "AI-ready draft. Review the answer key and personalize the explanation before locking it.",
+    reviewStatus: "needs_review",
+    source: "generated_draft",
+    generationMetadata: {
+      provider: "deterministic-template",
+      preset: presetKey,
+      topic,
+      notes,
+      generatedAt
+    },
+    choices: [
+      { text: correct, isCorrect: true },
+      { text: distractors[0] || "A close guess", isCorrect: false },
+      { text: distractors[1] || "Another option", isCorrect: false },
+      { text: distractors[2] || "A playful decoy", isCorrect: false }
+    ]
+  };
+}
+
 function defaultConfiguration(input = {}) {
   const questionSeconds = Number(input.questionSeconds ?? input.timerSeconds ?? 15);
   const winnerRule = configureWinnerRule(input.winnerRule || {
@@ -257,6 +334,18 @@ export class TriviaEngine {
     if (index === -1) throw new Error("Question not found");
     this.questionBank[index] = normalizeQuestion({ active: false, archived: true, locked: false }, { existing: this.questionBank[index], clock: this.clock, questionBank: this.questionBank });
     return cloneQuestion(this.questionBank[index]);
+  }
+
+  generateQuestionDrafts(input = {}) {
+    const generation = generatedDraftInputs(input);
+    generation.generatedAt = nowIso(this.clock);
+    const questions = [];
+    for (let index = 0; index < generation.count; index += 1) {
+      const question = normalizeQuestion(draftQuestionFromTemplate(generation, index), { clock: this.clock, questionBank: this.questionBank });
+      this.questionBank.push(question);
+      questions.push(cloneQuestion(question));
+    }
+    return questions;
   }
 
   reviewQuestion(questionId, action) {

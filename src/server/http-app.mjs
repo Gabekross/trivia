@@ -78,6 +78,13 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
     return;
   }
 
+  if (request.method === "POST" && url.pathname === "/api/questions/generate") {
+    if (!isOperatorAuthorized(request)) return sendUnauthorized(response);
+    const questions = await store.generateQuestionDrafts(await readJson(request));
+    sendJson(response, 201, { questions });
+    return;
+  }
+
   const questionReviewMatch = url.pathname.match(/^\/api\/questions\/([^/]+)\/review$/);
   if (questionReviewMatch && request.method === "POST") {
     if (!isOperatorAuthorized(request)) return sendUnauthorized(response);

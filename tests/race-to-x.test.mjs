@@ -105,6 +105,31 @@ test("question validation warnings and review status control playable bank", () 
   assert.throws(() => engine.updateQuestion(draft.id, { ...locked, difficulty: "medium" }), /Locked questions/);
 });
 
+test("generated question drafts require review before entering sessions", () => {
+  const engine = new TriviaEngine();
+  const drafts = engine.generateQuestionDrafts({
+    preset: "COUPLES",
+    topic: "anniversary dinner",
+    category: "Couples Night",
+    difficulty: "medium",
+    count: 3,
+    notes: "Favorite date-night memories"
+  });
+  const reviewSession = engine.createSession();
+  const approved = engine.reviewQuestion(drafts[0].id, "APPROVE");
+  const approvedSession = engine.createSession();
+
+  assert.equal(drafts.length, 3);
+  assert.equal(drafts.every((question) => question.reviewStatus === "needs_review"), true);
+  assert.equal(drafts.every((question) => question.source === "generated_draft"), true);
+  assert.equal(drafts[0].generationMetadata.preset, "COUPLES");
+  assert.equal(drafts[0].generationMetadata.topic, "anniversary dinner");
+  assert.equal(reviewSession.questionIds.some((id) => drafts.map((draft) => draft.id).includes(id)), false);
+  assert.equal(approved.reviewStatus, "approved");
+  assert.equal(approvedSession.questionIds.includes(drafts[0].id), true);
+  assert.equal(approvedSession.questionIds.includes(drafts[1].id), false);
+});
+
 test("one answer is accepted per player per question", () => {
   const engine = new TriviaEngine();
   const session = engine.createSession({ targetCorrect: 3 });

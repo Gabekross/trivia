@@ -21,6 +21,14 @@ let sessionForm = {
 let operatorSecret = getStoredOperatorSecret();
 let questionBank = [];
 let questionForm = blankQuestionForm();
+let generatorForm = {
+  preset: "FAMILY",
+  topic: "family memories",
+  category: "Family Night",
+  difficulty: "easy",
+  count: 4,
+  notes: ""
+};
 let sessionId = null;
 let joinCode = null;
 let shareOrigin = window.location.origin;
@@ -340,6 +348,7 @@ function questionBuilder() {
         <button id="loadQuestions" class="secondaryBtn">Load</button>
         <button id="newQuestion" class="secondaryBtn">New</button>
       </div>
+      ${questionGenerator()}
       <label class="label">Prompt<textarea id="questionPrompt" rows="3">${escapeHtml(questionForm.prompt)}</textarea></label>
       <div class="fieldGrid">
         <label class="label">Category<input id="questionCategory" value="${escapeHtml(questionForm.category)}"></label>
@@ -358,6 +367,31 @@ function questionBuilder() {
       <div class="questionBankList">
         ${questionBank.length ? questionBank.map(questionBankRow).join("") : "<span class='muted'>Load the question bank to edit rounds.</span>"}
       </div>
+    </section>
+  `;
+}
+
+function questionGenerator() {
+  return `
+    <section class="generatorPanel">
+      <div class="sectionHeader inline"><span class="eyebrow">Draft Generator</span><h2>AI-Ready Batch</h2></div>
+      <div class="fieldGrid">
+        <label class="label">Preset
+          <select id="generatorPreset">
+            ${[["FAMILY", "Family Night"], ["COUPLES", "Couples Night"], ["GENERAL", "General Trivia"]].map(([value, label]) => `<option value="${value}" ${generatorForm.preset === value ? "selected" : ""}>${label}</option>`).join("")}
+          </select>
+        </label>
+        <label class="label">Draft count<input id="generatorCount" type="number" min="1" max="8" value="${generatorForm.count}"></label>
+        <label class="label">Topic<input id="generatorTopic" value="${escapeHtml(generatorForm.topic)}" placeholder="family memories"></label>
+        <label class="label">Category<input id="generatorCategory" value="${escapeHtml(generatorForm.category)}" placeholder="Family Night"></label>
+        <label class="label">Difficulty
+          <select id="generatorDifficulty">
+            ${["easy", "medium", "hard"].map((level) => `<option value="${level}" ${generatorForm.difficulty === level ? "selected" : ""}>${level}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      <label class="label">Host notes<textarea id="generatorNotes" rows="2" placeholder="Names, memories, inside jokes, or round theme">${escapeHtml(generatorForm.notes)}</textarea></label>
+      <button id="generateDrafts" class="secondaryBtn">Generate Review Drafts</button>
     </section>
   `;
 }
@@ -752,6 +786,7 @@ function bindEvents() {
     questionForm = blankQuestionForm();
     await render();
   });
+  document.querySelector("#generateDrafts")?.addEventListener("click", generateQuestionDrafts);
   document.querySelector("#saveQuestion")?.addEventListener("click", saveQuestionFromForm);
   document.querySelectorAll("[data-edit-question]").forEach((button) => {
     button.addEventListener("click", async () => {
@@ -936,6 +971,21 @@ async function loadQuestionBank() {
   }
 }
 
+async function generateQuestionDrafts() {
+  try {
+    generatorForm = readGeneratorForm();
+    const result = await operatorApi("/api/questions/generate", {
+      method: "POST",
+      body: JSON.stringify(generatorForm)
+    });
+    questionBank = result.questions.concat(questionBank);
+    showToast(`${result.questions.length} review drafts generated.`);
+    await loadQuestionBank();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
 async function saveQuestionFromForm() {
   try {
     const correctIndex = Number(document.querySelector("input[name='correctChoice']:checked")?.value || 0);
@@ -969,6 +1019,17 @@ async function saveQuestionFromForm() {
   } catch (error) {
     showToast(error.message);
   }
+}
+
+function readGeneratorForm() {
+  return {
+    preset: document.querySelector("#generatorPreset")?.value || generatorForm.preset,
+    topic: document.querySelector("#generatorTopic")?.value || generatorForm.topic,
+    category: document.querySelector("#generatorCategory")?.value || generatorForm.category,
+    difficulty: document.querySelector("#generatorDifficulty")?.value || generatorForm.difficulty,
+    count: Number(document.querySelector("#generatorCount")?.value || generatorForm.count),
+    notes: document.querySelector("#generatorNotes")?.value || ""
+  };
 }
 
 function readSessionForm() {

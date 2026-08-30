@@ -370,6 +370,20 @@ p {
   gap: 8px;
 }
 
+.generatorPanel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #d5e8ff;
+  border-radius: 8px;
+  background: #f5fbff;
+}
+
+.generatorPanel .fieldGrid .label:nth-child(3),
+.generatorPanel .fieldGrid .label:nth-child(4) {
+  grid-column: auto;
+}
+
 .choiceEditor {
   display: grid;
   gap: 8px;

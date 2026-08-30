@@ -52,6 +52,13 @@ export class JsonGameStore extends GameStore {
     return saved;
   }
 
+  async generateQuestionDrafts(input) {
+    await this.ready;
+    const questions = this.engine.generateQuestionDrafts(input);
+    await this.persist();
+    return questions;
+  }
+
   async archiveQuestion(questionId) {
     await this.ready;
     const question = this.engine.archiveQuestion(questionId);

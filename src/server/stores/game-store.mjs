@@ -23,6 +23,10 @@ export class GameStore {
     throw new Error("GameStore.saveQuestion is not implemented");
   }
 
+  async generateQuestionDrafts(input) {
+    throw new Error("GameStore.generateQuestionDrafts is not implemented");
+  }
+
   async archiveQuestion(questionId) {
     throw new Error("GameStore.archiveQuestion is not implemented");
   }

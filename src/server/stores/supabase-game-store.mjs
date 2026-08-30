@@ -59,6 +59,13 @@ export class SupabaseGameStore extends GameStore {
     return saved;
   }
 
+  async generateQuestionDrafts(input) {
+    await this.prepare();
+    const questions = this.engine.generateQuestionDrafts(input);
+    await this.persist();
+    return questions;
+  }
+
   async archiveQuestion(questionId) {
     await this.prepare();
     const question = this.engine.archiveQuestion(questionId);
