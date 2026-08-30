@@ -79,6 +79,12 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
     return;
   }
 
+  if (request.method === "GET" && url.pathname === "/api/session-history") {
+    if (!isOperatorAuthorized(request)) return sendUnauthorized(response);
+    sendJson(response, 200, { sessions: await store.listSessionSummaries({ limit: url.searchParams.get("limit") }) });
+    return;
+  }
+
   if (request.method === "POST" && url.pathname === "/api/questions") {
     if (!isOperatorAuthorized(request)) return sendUnauthorized(response);
     const question = await store.saveQuestion(await readJson(request));

@@ -144,6 +144,28 @@ test("stored player id can reconnect after the lobby closes without duplicating"
   assert.throws(() => engine.joinSession(session.joinCode, "New Player"), /no longer accepting/);
 });
 
+test("session summaries capture winner and scoring history", () => {
+  const engine = new TriviaEngine();
+  const session = engine.createSession({ title: "History Night", targetCorrect: 1 });
+  const player = engine.joinSession(session.joinCode, "Historian");
+  engine.operatorAction(session.id, "START");
+  const question = engine.snapshot(session.id, Role.OPERATOR).question;
+  const correct = question.choices.find((choice) => choice.isCorrect);
+
+  engine.submitAnswer({ sessionId: session.id, playerId: player.id, choiceId: correct.id });
+  engine.operatorAction(session.id, "ACK_WINNER");
+  engine.operatorAction(session.id, "END");
+  const [summary] = engine.listSessionSummaries();
+
+  assert.equal(summary.sessionId, session.id);
+  assert.equal(summary.title, "History Night");
+  assert.equal(summary.status, SessionStatus.ENDED);
+  assert.equal(summary.winner.displayName, "Historian");
+  assert.equal(summary.answerCount, 1);
+  assert.equal(summary.leaderboard[0].displayName, "Historian");
+  assert.equal(typeof summary.endedAt, "string");
+});
+
 test("one answer is accepted per player per question", () => {
   const engine = new TriviaEngine();
   const session = engine.createSession({ targetCorrect: 3 });

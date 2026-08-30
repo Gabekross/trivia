@@ -19,6 +19,10 @@ export class GameStore {
     throw new Error("GameStore.listQuestions is not implemented");
   }
 
+  async listSessionSummaries(options = {}) {
+    throw new Error("GameStore.listSessionSummaries is not implemented");
+  }
+
   async saveQuestion(question) {
     throw new Error("GameStore.saveQuestion is not implemented");
   }

@@ -43,6 +43,7 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     const clientConfig = await api("/api/client-config");
     const bootstrap = await api("/api/bootstrap");
     const unauthorizedQuestions = await fetch(`${baseUrl}/api/questions`);
+    const unauthorizedHistory = await fetch(`${baseUrl}/api/session-history`);
     const savedQuestion = await operatorApi("/api/questions", {
       method: "POST",
       body: JSON.stringify({
@@ -109,6 +110,9 @@ test("dev server exposes trusted mutation API with persistence", async () => {
       body: JSON.stringify({ playerId: joined.playerId, choiceId: correct.id, idempotencyKey: "api-answer" })
     });
     const player = await api(`/api/sessions/${created.sessionId}/snapshot?role=PLAYER&playerId=${joined.playerId}`);
+    await operatorApi(`/api/sessions/${created.sessionId}/operator`, { method: "POST", body: JSON.stringify({ action: "ACK_WINNER" }) });
+    await operatorApi(`/api/sessions/${created.sessionId}/operator`, { method: "POST", body: JSON.stringify({ action: "END" }) });
+    const history = await operatorApi("/api/session-history?limit=3");
     const byCode = await api(`/api/join-codes/${encodeURIComponent(paddedJoinCode)}`);
     const qr = await fetch(`${baseUrl}/api/qr?data=${encodeURIComponent(`${baseUrl}/trivia/session/${created.joinCode}`)}`);
     const qrSvg = await qr.text();
@@ -134,6 +138,7 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     assert.equal(clientConfig.realtime, false);
     assert.equal(unauthorizedCreate.status, 401);
     assert.equal(unauthorizedQuestions.status, 401);
+    assert.equal(unauthorizedHistory.status, 401);
     assert.equal(savedQuestion.question.choices.filter((choice) => choice.isCorrect).length, 1);
     assert.equal(savedQuestion.question.reviewStatus, "approved");
     assert.equal(Array.isArray(savedQuestion.question.validationWarnings), true);
@@ -146,6 +151,9 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     assert.equal(unauthorizedReview.status, 401);
     assert.equal(unauthorizedOperator.status, 401);
     assert.equal(unauthorizedOperatorSnapshot.status, 401);
+    assert.equal(history.sessions[0].sessionId, created.sessionId);
+    assert.equal(history.sessions[0].winner.displayName, "API Player");
+    assert.equal(history.sessions[0].answerCount, 1);
     assert.equal(questions.questions.some((question) => question.id === savedQuestion.question.id), true);
     assert.equal(archivedQuestion.question.archived, true);
     assert.equal(byCode.sessionId, created.sessionId);

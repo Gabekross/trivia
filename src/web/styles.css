@@ -988,6 +988,59 @@ p {
   font-size: 11px;
 }
 
+.historyHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-top: 18px;
+}
+
+.historyHeader strong {
+  color: var(--primary);
+  font-size: 13px;
+}
+
+.historyList {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.historyRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--field);
+}
+
+.historyRow span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.historyRow strong,
+.historyRow small,
+.historyRow b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.historyRow strong,
+.historyRow b {
+  color: var(--primary);
+}
+
+.historyRow small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .playerStage {
   display: grid;
   height: 100dvh;

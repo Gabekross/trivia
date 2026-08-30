@@ -22,6 +22,7 @@ let sessionForm = {
 let operatorSecret = getStoredOperatorSecret();
 let questionBank = [];
 let questionForm = blankQuestionForm();
+let sessionHistory = [];
 let generatorForm = {
   preset: "FAMILY",
   topic: "family memories",
@@ -683,7 +684,19 @@ function auditLog(snapshot) {
     <section class="eventPanel">
       <div class="sectionHeader inline"><span class="eyebrow">Recovery</span><h2>Server State</h2></div>
       <div class="eventList"><span><strong>${state}</strong><small>Persisted backend</small></span><span><strong>${ruleSummary(snapshot.session.winnerRule)}</strong><small>Rule config</small></span></div>
+      <div class="historyHeader"><strong>Recent Sessions</strong><button id="loadHistory" class="copyLink">Refresh</button></div>
+      <div class="historyList">${sessionHistory.length ? sessionHistory.map(historyRow).join("") : "<span class='muted'>Refresh to load durable session summaries.</span>"}</div>
     </section>
+  `;
+}
+
+function historyRow(item) {
+  const winner = item.winner?.displayName || "No winner";
+  return `
+    <div class="historyRow">
+      <span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(ruleSummary(item.winnerRule))} - ${item.playerCount} players - ${item.answerCount} answers</small></span>
+      <b>${escapeHtml(winner)}</b>
+    </div>
   `;
 }
 
@@ -816,6 +829,7 @@ function bindEvents() {
     storeOperatorSecret(operatorSecret);
   });
   document.querySelector("#loadQuestions")?.addEventListener("click", loadQuestionBank);
+  document.querySelector("#loadHistory")?.addEventListener("click", loadSessionHistory);
   document.querySelector("#newQuestion")?.addEventListener("click", async () => {
     questionForm = blankQuestionForm();
     await render();
@@ -1000,6 +1014,16 @@ async function loadQuestionBank() {
   try {
     const result = await operatorApi("/api/questions");
     questionBank = result.questions;
+    await render();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function loadSessionHistory() {
+  try {
+    const result = await operatorApi("/api/session-history?limit=8");
+    sessionHistory = result.sessions || [];
     await render();
   } catch (error) {
     showToast(error.message);

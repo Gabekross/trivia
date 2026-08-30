@@ -334,6 +334,13 @@ export class TriviaEngine {
       .map(cloneQuestion);
   }
 
+  listSessionSummaries({ limit = 12 } = {}) {
+    return [...this.sessions.values()]
+      .map((session) => sessionSummary(session))
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, Math.max(1, Number(limit) || 12));
+  }
+
   addQuestion(input = {}) {
     const question = normalizeQuestion(input, { clock: this.clock, questionBank: this.questionBank });
     this.questionBank.push(question);
@@ -652,6 +659,39 @@ function coupleStandingsFor(session) {
   return [...couples.values()]
     .sort((a, b) => b.score - a.score || Number(b.ready) - Number(a.ready) || a.pairCode.localeCompare(b.pairCode))
     .map((couple, index) => ({ rank: index + 1, ...couple }));
+}
+
+function sessionSummary(session) {
+  const leaderboard = [...session.players.values()]
+    .sort((a, b) => b.correctCount - a.correctCount || b.points - a.points || a.joinOrder - b.joinOrder)
+    .slice(0, 5)
+    .map((player, index) => ({
+      rank: index + 1,
+      id: player.id,
+      displayName: player.displayName,
+      correctCount: player.correctCount,
+      points: player.points,
+      status: player.status
+    }));
+  const winner = session.winners[0] || null;
+  const winnerPlayer = winner ? session.players.get(winner.playerId) : null;
+  const endedEvent = [...session.auditLog].reverse().find((event) => event.eventType === "SESSION_ENDED" || event.eventType === "QUESTION_BANK_EXHAUSTED");
+  return {
+    sessionId: session.id,
+    joinCode: session.joinCode,
+    title: session.configurationSnapshot.title,
+    status: session.status,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+    endedAt: endedEvent?.at || (session.status === SessionStatus.ENDED ? session.updatedAt : null),
+    winnerRule: session.configurationSnapshot.winnerRule,
+    playerCount: session.players.size,
+    answerCount: session.answers.size,
+    questionCount: session.questionIds?.length || 0,
+    winner: winner ? { ...winner, displayName: winnerPlayer?.displayName || "Winner" } : null,
+    leaderboard,
+    coupleStandings: coupleStandingsFor(session).slice(0, 5)
+  };
 }
 
 function secondsElapsed(startedAt, now) {

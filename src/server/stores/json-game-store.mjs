@@ -45,6 +45,11 @@ export class JsonGameStore extends GameStore {
     return this.engine.listQuestions();
   }
 
+  async listSessionSummaries(options = {}) {
+    await this.ready;
+    return this.engine.listSessionSummaries(options);
+  }
+
   async saveQuestion(question) {
     await this.ready;
     const saved = question.id ? this.engine.updateQuestion(question.id, question) : this.engine.addQuestion(question);

@@ -52,6 +52,11 @@ export class SupabaseGameStore extends GameStore {
     return this.engine.listQuestions();
   }
 
+  async listSessionSummaries(options = {}) {
+    await this.prepare();
+    return this.engine.listSessionSummaries(options);
+  }
+
   async saveQuestion(question) {
     await this.prepare();
     const saved = question.id ? this.engine.updateQuestion(question.id, question) : this.engine.addQuestion(question);
