@@ -140,7 +140,11 @@ test("Couples Match scores only when both partners answer correctly", () => {
   assert.equal(session.winners[0].ruleType, "COUPLES_MATCH");
   assert.deepEqual(session.winners[0].metadata.partnerPlayerIds, [firstPartner.id, secondPartner.id]);
   assert.equal(session.winners[0].metadata.coupleScore, 1);
-  assert.equal(engine.snapshot(session.id, "PLAYER", firstPartner.id).player.progress.coupleScore, 1);
+  const snapshot = engine.snapshot(session.id, "PLAYER", firstPartner.id);
+  assert.equal(snapshot.player.progress.coupleScore, 1);
+  assert.deepEqual(snapshot.coupleStandings[0].memberIds, [firstPartner.id, secondPartner.id]);
+  assert.equal(snapshot.coupleStandings[0].score, 1);
+  assert.equal(snapshot.coupleStandings[0].ready, true);
 });
 
 function activeQuestion(engine, session) {

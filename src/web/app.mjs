@@ -214,7 +214,7 @@ function operatorView(snapshot) {
           ${actionButton("RESET", "Reset", snapshot.session.status !== SessionStatus.ENDED)}
           ${actionButton("END", "End", snapshot.session.status !== SessionStatus.ENDED, "danger")}
         </div>
-        <div class="twoColumn">${leaderboard(snapshot)}${auditLog(snapshot)}</div>
+        <div class="twoColumn">${scoreboard(snapshot)}${auditLog(snapshot)}</div>
       </section>
     </section>
   `;
@@ -250,7 +250,7 @@ function playerView(snapshot) {
           ${snapshot.session.winner && snapshot.player?.status !== "WINNER" ? winnerMoment(`${winnerName(snapshot)} won`, "Stay connected. The host decides what happens next.") : ""}
           ${question ? playerQuestion(snapshot, question) : waitingPanel(snapshot)}
         </section>
-        ${leaderboard(snapshot, "compact")}
+        ${scoreboard(snapshot, "compact")}
       </div>
     </section>
   `;
@@ -270,7 +270,7 @@ function displayView(snapshot) {
         ${question ? displayQuestion(snapshot, question) : ""}
         ${snapshot.session.winner ? `<div class="winnerBanner"><span>Winner</span><strong>${winnerName(snapshot)}</strong></div>` : ""}
       </div>
-      <div class="displayFooter">${leaderboard(snapshot, "display")}</div>
+      <div class="displayFooter">${scoreboard(snapshot, "display")}</div>
       <div class="displayControlDock projectorControls">
         <button class="fullscreenBtn" id="fullscreenToggle">Full Screen</button>
       </div>
@@ -517,10 +517,12 @@ function clearStoredPlayerId() {
 }
 
 function playerHud(snapshot) {
+  const pairCode = snapshot.player.progress?.pairCode;
   return `
     <section class="playerHud">
       <strong class="playerName">${escapeHtml(snapshot.player.displayName)}</strong>
       <div class="miniStats">${stat("Correct", snapshot.player.correctCount)}${stat("Streak", snapshot.player.streak)}</div>
+      ${pairCode ? `<span class="pairBadge">Couple ${escapeHtml(pairCode)}</span>` : ""}
       <p class="ruleHud">${playerRuleHud(snapshot.player.progress)}</p>
     </section>
   `;
@@ -619,7 +621,7 @@ function playerQuestion(snapshot, question) {
 }
 
 function displayLobby(snapshot) {
-  return `<div class="displayHero"><span class="displayKicker">Live Game Code</span><h1>${escapeHtml(snapshot.session.title)}</h1><div class="heroCode">${snapshot.session.joinCode}</div><p>${snapshot.session.playerCount} players connected</p></div>`;
+  return `<div class="displayHero"><span class="displayKicker">Live Game Code</span><h1>${escapeHtml(snapshot.session.title)}</h1><div class="heroCode">${snapshot.session.joinCode}</div><p>${snapshot.session.playerCount} players connected</p>${snapshot.session.winnerRule.type === "COUPLES_MATCH" ? coupleStandings(snapshot, "lobby") : ""}</div>`;
 }
 
 function displayQuestion(snapshot, question) {
@@ -649,6 +651,28 @@ function leaderboard(snapshot, mode = "normal") {
     <section class="leaderboardPanel ${mode}">
       <div class="sectionHeader inline"><span class="eyebrow">Leaderboard</span><h2>Top Scores</h2></div>
       <div class="leaderboard">${leaders.length ? leaders.map((item) => `<div class="leader"><strong>#${item.rank}</strong><span>${escapeHtml(item.displayName)}</span><b>${item.correctCount}</b></div>`).join("") : "<span class='muted'>No scores yet</span>"}</div>
+    </section>
+  `;
+}
+
+function scoreboard(snapshot, mode = "normal") {
+  return snapshot.session.winnerRule.type === "COUPLES_MATCH" ? coupleStandings(snapshot, mode) : leaderboard(snapshot, mode);
+}
+
+function coupleStandings(snapshot, mode = "normal") {
+  const couples = snapshot.coupleStandings || [];
+  return `
+    <section class="couplePanel ${mode}">
+      <div class="sectionHeader inline"><span class="eyebrow">Couples</span><h2>Match Board</h2></div>
+      <div class="coupleList">
+        ${couples.length ? couples.map((couple) => `
+          <div class="coupleRow ${couple.ready ? "ready" : "waiting"}">
+            <strong>#${couple.rank}</strong>
+            <span><b>${escapeHtml(couple.pairCode)}</b><small>${escapeHtml(couple.members.join(" + "))}</small></span>
+            <em>${couple.score}</em>
+          </div>
+        `).join("") : "<span class='muted'>Couple codes appear as partners join.</span>"}
+      </div>
     </section>
   `;
 }

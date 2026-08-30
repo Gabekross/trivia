@@ -584,6 +584,7 @@ export class TriviaEngine {
       .sort((a, b) => b.correctCount - a.correctCount || b.points - a.points || a.joinOrder - b.joinOrder)
       .slice(0, session.configurationSnapshot.leaderboardCount)
       .map((item, index) => ({ rank: index + 1, id: item.id, displayName: item.displayName, correctCount: item.correctCount, points: item.points, status: item.status }));
+    const coupleStandings = coupleStandingsFor(session).slice(0, role === Role.PLAYER ? 5 : session.configurationSnapshot.leaderboardCount);
 
     return {
       session: {
@@ -610,6 +611,7 @@ export class TriviaEngine {
       },
       question: currentQuestion ? cloneQuestionForPlayer(currentQuestion, reveal) : null,
       answerCount: currentQuestion ? [...session.answers.values()].filter((answer) => answer.questionId === currentQuestion.id).length : 0,
+      coupleStandings,
       leaderboard: role === Role.PLAYER ? leaderboard.slice(0, 5) : leaderboard,
       player: player
         ? {
@@ -629,6 +631,27 @@ export class TriviaEngine {
         : null
     };
   }
+}
+
+function coupleStandingsFor(session) {
+  const couples = new Map();
+  for (const player of session.players.values()) {
+    if (!player.pairCode) continue;
+    const couple = couples.get(player.pairCode) || {
+      pairCode: player.pairCode,
+      score: session.coupleScores?.[player.pairCode] || 0,
+      memberIds: [],
+      members: [],
+      ready: false
+    };
+    couple.memberIds.push(player.id);
+    couple.members.push(player.displayName);
+    couple.ready = couple.memberIds.length >= 2;
+    couples.set(player.pairCode, couple);
+  }
+  return [...couples.values()]
+    .sort((a, b) => b.score - a.score || Number(b.ready) - Number(a.ready) || a.pairCode.localeCompare(b.pairCode))
+    .map((couple, index) => ({ rank: index + 1, ...couple }));
 }
 
 function secondsElapsed(startedAt, now) {

@@ -268,6 +268,7 @@ p {
 .liveDesk,
 .questionPanel,
 .leaderboardPanel,
+.couplePanel,
 .eventPanel,
 .joinPanel,
 .linkPanel,
@@ -321,6 +322,7 @@ p {
 
 .sectionHeader h2,
 .leaderboardPanel h2,
+.couplePanel h2,
 .eventPanel h2 {
   font-size: 18px;
 }
@@ -897,15 +899,66 @@ p {
 }
 
 .leaderboardPanel,
+.couplePanel,
 .eventPanel {
   padding: 20px;
 }
 
 .leaderboard,
+.coupleList,
 .eventList {
   display: grid;
   gap: 9px;
   margin-top: 14px;
+}
+
+.coupleRow {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 12px;
+  border-radius: 8px;
+  background: var(--field);
+}
+
+.coupleRow strong,
+.coupleRow em {
+  color: var(--accent);
+  font-style: normal;
+  font-weight: 900;
+}
+
+.coupleRow span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.coupleRow b,
+.coupleRow small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coupleRow small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.coupleRow.waiting {
+  background: #fff8e9;
+}
+
+.pairBadge {
+  width: fit-content;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: #eef6ff;
+  color: #124f8c;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .leader {
@@ -1221,12 +1274,14 @@ p {
   background: color-mix(in srgb, var(--accent-2) 18%, white);
 }
 
-.leaderboardPanel.compact {
+.leaderboardPanel.compact,
+.couplePanel.compact {
   padding: 16px;
   box-shadow: none;
 }
 
-.leaderboardPanel.compact .leaderboard {
+.leaderboardPanel.compact .leaderboard,
+.couplePanel.compact .coupleList {
   margin-top: 10px;
 }
 
@@ -1457,7 +1512,8 @@ body.isFullscreen .displayStage {
   font-weight: 800;
 }
 
-.leaderboardPanel.display {
+.leaderboardPanel.display,
+.couplePanel.display {
   width: min(820px, 100%);
   margin-left: auto;
   padding: 14px;
@@ -1468,16 +1524,23 @@ body.isFullscreen .displayStage {
 }
 
 .leaderboardPanel.display h2,
-.leaderboardPanel.display .eyebrow {
+.leaderboardPanel.display .eyebrow,
+.couplePanel.display h2,
+.couplePanel.display .eyebrow {
   color: #ffffff;
 }
 
-.leaderboardPanel.display .leader {
+.leaderboardPanel.display .leader,
+.couplePanel.display .coupleRow {
   background: rgba(255, 255, 255, 0.15);
 }
 
 .leaderboardPanel.display .leader strong,
-.leaderboardPanel.display .leader b {
+.leaderboardPanel.display .leader b,
+.couplePanel.display .coupleRow strong,
+.couplePanel.display .coupleRow em,
+.couplePanel.display .coupleRow small,
+.couplePanel.display .coupleRow b {
   color: #ffffff;
 }
 

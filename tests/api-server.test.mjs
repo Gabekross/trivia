@@ -126,6 +126,8 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     assert.equal(rejoined.snapshot.session.playerCount, 1);
     assert.equal(couplesSession.snapshot.session.winnerRule.type, "COUPLES_MATCH");
     assert.equal(couplePlayer.snapshot.player.progress.pairCode, "Table 4");
+    assert.equal(couplePlayer.snapshot.coupleStandings[0].pairCode, "Table 4");
+    assert.equal(couplePlayer.snapshot.coupleStandings[0].ready, false);
     assert.equal(accepted.snapshot.player.currentAnswer.choiceId, correct.id);
     assert.equal(health.ok, true);
     assert.equal(health.store, "json");
