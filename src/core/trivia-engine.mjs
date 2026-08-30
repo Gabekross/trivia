@@ -29,6 +29,63 @@ function cloneQuestionForPlayer(question, reveal = false) {
   };
 }
 
+function cloneQuestion(question) {
+  return {
+    id: question.id,
+    categoryId: question.categoryId,
+    category: question.category,
+    difficulty: question.difficulty,
+    prompt: question.prompt,
+    explanation: question.explanation,
+    active: question.active !== false,
+    archived: Boolean(question.archived),
+    validationStatus: question.validationStatus || "approved",
+    source: question.source || "seed",
+    createdAt: question.createdAt,
+    updatedAt: question.updatedAt,
+    choices: question.choices.map((choice) => ({ ...choice }))
+  };
+}
+
+function normalizeQuestion(input = {}, { existing = null, clock = Date } = {}) {
+  const prompt = String(input.prompt ?? existing?.prompt ?? "").replace(/\s+/g, " ").trim();
+  const category = String(input.category ?? existing?.category ?? "General Knowledge").replace(/\s+/g, " ").trim() || "General Knowledge";
+  const difficulty = String(input.difficulty ?? existing?.difficulty ?? "medium").toLowerCase();
+  const explanation = String(input.explanation ?? existing?.explanation ?? "").replace(/\s+/g, " ").trim();
+  const choices = normalizeChoices(input.choices ?? existing?.choices ?? []);
+  const correctCount = choices.filter((choice) => choice.isCorrect).length;
+  if (prompt.length < 6) throw new Error("Question prompt is required.");
+  if (choices.length < 2 || choices.length > 6) throw new Error("Questions require 2 to 6 answer choices.");
+  if (correctCount !== 1) throw new Error("Questions require exactly one correct answer.");
+  return {
+    id: existing?.id || input.id || makeId("q"),
+    categoryId: input.categoryId || existing?.categoryId || category.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "general",
+    category,
+    difficulty,
+    prompt,
+    explanation,
+    active: input.active ?? existing?.active ?? true,
+    archived: Boolean(input.archived ?? existing?.archived ?? false),
+    validationStatus: input.validationStatus || existing?.validationStatus || "approved",
+    source: input.source || existing?.source || "operator",
+    createdAt: existing?.createdAt || nowIso(clock),
+    updatedAt: nowIso(clock),
+    choices
+  };
+}
+
+function normalizeChoices(choices = []) {
+  const labels = ["A", "B", "C", "D", "E", "F"];
+  return choices
+    .map((choice, index) => ({
+      id: choice.id || makeId("choice"),
+      label: labels[index] || String(index + 1),
+      text: String(choice.text || "").replace(/\s+/g, " ").trim(),
+      isCorrect: Boolean(choice.isCorrect)
+    }))
+    .filter((choice) => choice.text);
+}
+
 function defaultConfiguration(input = {}) {
   const questionSeconds = Number(input.questionSeconds ?? input.timerSeconds ?? 15);
   const winnerRule = configureWinnerRule(input.winnerRule || {
@@ -58,13 +115,14 @@ function defaultConfiguration(input = {}) {
 export class TriviaEngine {
   constructor({ clock = Date, questionBank = defaultQuestions } = {}) {
     this.clock = clock;
-    this.questionBank = questionBank;
+    this.questionBank = questionBank.map((question) => normalizeQuestion(question, { clock: this.clock }));
     this.sessions = new Map();
     this.joinCodes = new Map();
   }
 
   exportState() {
     return {
+      questionBank: this.questionBank.map(cloneQuestion),
       sessions: [...this.sessions.values()].map((session) => ({
         ...session,
         players: [...session.players.values()],
@@ -79,10 +137,14 @@ export class TriviaEngine {
   importState(state = {}) {
     this.sessions.clear();
     this.joinCodes.clear();
+    if (state.questionBank?.length) {
+      this.questionBank = state.questionBank.map((question) => normalizeQuestion(question, { clock: this.clock }));
+    }
     for (const saved of state.sessions || []) {
       const session = {
         ...saved,
         configurationSnapshot: defaultConfiguration(saved.configurationSnapshot),
+        questionIds: saved.questionIds || this.activeQuestionBank().map((question) => question.id),
         players: new Map((saved.players || []).map((player) => [player.id, player])),
         answers: new Map((saved.answers || []).map((answer) => [`${answer.questionId}:${answer.playerId}`, answer])),
         idempotencyKeys: new Map(),
@@ -101,6 +163,7 @@ export class TriviaEngine {
       joinCode,
       status: SessionStatus.LOBBY,
       configurationSnapshot: defaultConfiguration(config),
+      questionIds: this.activeQuestionBank().map((question) => question.id),
       currentQuestionIndex: -1,
       currentQuestionId: null,
       questionActivatedAt: null,
@@ -126,6 +189,46 @@ export class TriviaEngine {
     const session = this.sessions.get(sessionId);
     if (!session) throw new Error("Session not found");
     return session;
+  }
+
+  listQuestions({ includeArchived = false } = {}) {
+    return this.questionBank
+      .filter((question) => includeArchived || !question.archived)
+      .map(cloneQuestion);
+  }
+
+  addQuestion(input = {}) {
+    const question = normalizeQuestion(input, { clock: this.clock });
+    this.questionBank.push(question);
+    return cloneQuestion(question);
+  }
+
+  updateQuestion(questionId, input = {}) {
+    const index = this.questionBank.findIndex((question) => question.id === questionId);
+    if (index === -1) throw new Error("Question not found");
+    const question = normalizeQuestion({ ...input, id: questionId }, { existing: this.questionBank[index], clock: this.clock });
+    this.questionBank[index] = question;
+    return cloneQuestion(question);
+  }
+
+  archiveQuestion(questionId) {
+    const index = this.questionBank.findIndex((question) => question.id === questionId);
+    if (index === -1) throw new Error("Question not found");
+    this.questionBank[index] = normalizeQuestion({ active: false, archived: true }, { existing: this.questionBank[index], clock: this.clock });
+    return cloneQuestion(this.questionBank[index]);
+  }
+
+  activeQuestionBank() {
+    return this.questionBank.filter((question) => question.active !== false && !question.archived);
+  }
+
+  questionForSession(session, questionId) {
+    return this.questionBank.find((item) => item.id === questionId) || null;
+  }
+
+  questionsForSession(session) {
+    const questionIds = session.questionIds?.length ? session.questionIds : this.activeQuestionBank().map((question) => question.id);
+    return questionIds.map((id) => this.questionForSession(session, id)).filter(Boolean);
   }
 
   joinSession(joinCode, displayName) {
@@ -190,10 +293,11 @@ export class TriviaEngine {
 
   activateNextQuestion(session) {
     const nextIndex = session.currentQuestionIndex + 1;
-    if (nextIndex >= this.questionBank.length) return this.transition(session, SessionStatus.ENDED, "QUESTION_BANK_EXHAUSTED");
+    const sessionQuestions = this.questionsForSession(session);
+    if (nextIndex >= sessionQuestions.length) return this.transition(session, SessionStatus.ENDED, "QUESTION_BANK_EXHAUSTED");
     assertTransition(session.status, SessionStatus.QUESTION_ACTIVE);
     session.currentQuestionIndex = nextIndex;
-    session.currentQuestionId = this.questionBank[nextIndex].id;
+    session.currentQuestionId = sessionQuestions[nextIndex].id;
     session.questionActivatedAt = nowIso(this.clock);
     return this.touch(Object.assign(session, { status: SessionStatus.QUESTION_ACTIVE }), "QUESTION_ACTIVATED", {
       questionId: session.currentQuestionId
@@ -228,7 +332,7 @@ export class TriviaEngine {
     if (session.answers.has(key)) return session.answers.get(key);
     if (idempotencyKey && session.idempotencyKeys.has(idempotencyKey)) return session.idempotencyKeys.get(idempotencyKey);
 
-    const question = this.questionBank.find((item) => item.id === session.currentQuestionId);
+    const question = this.questionForSession(session, session.currentQuestionId);
     const choice = question.choices.find((item) => item.id === choiceId);
     if (!choice) throw new Error("Choice not found for active question");
 
@@ -299,7 +403,7 @@ export class TriviaEngine {
 
   snapshot(sessionId, role, playerId = null) {
     const session = this.requireSession(sessionId);
-    const currentQuestion = this.questionBank.find((item) => item.id === session.currentQuestionId) || null;
+    const currentQuestion = this.questionForSession(session, session.currentQuestionId);
     const reveal = session.status === SessionStatus.ANSWER_REVEAL || session.status === SessionStatus.LEADERBOARD || session.status === SessionStatus.WINNER_FOUND || session.status === SessionStatus.PAUSED || role === Role.OPERATOR;
     const player = playerId ? session.players.get(playerId) : null;
     const playerAnswer = player && currentQuestion ? session.answers.get(`${currentQuestion.id}:${player.id}`) : null;
@@ -317,6 +421,7 @@ export class TriviaEngine {
         playerCount: session.players.size,
         winner: session.winners[0] || null,
         winnerRule: session.configurationSnapshot.winnerRule,
+        questionCount: session.questionIds?.length || this.activeQuestionBank().length,
         configuration: {
           maxPlayers: session.configurationSnapshot.maxPlayers,
           timerSeconds: session.configurationSnapshot.timerSeconds,

@@ -41,7 +41,8 @@ body.isPlayerRoute {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
   min-width: 0;
 }
@@ -62,7 +63,8 @@ button.busy {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   min-height: 44px;
   padding: 11px 14px;
@@ -71,6 +73,10 @@ select {
   background: var(--panel);
   color: var(--ink);
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+textarea {
+  resize: vertical;
 }
 
 input[type="checkbox"] {
@@ -82,8 +88,18 @@ input[type="checkbox"] {
   accent-color: var(--accent-2);
 }
 
+input[type="radio"] {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent);
   outline: none;
@@ -338,6 +354,87 @@ p {
 .timingSettings {
   display: grid;
   gap: 8px;
+}
+
+.questionBuilder {
+  padding: 16px;
+  border: 1px solid rgba(229, 233, 240, 0.92);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow);
+}
+
+.miniActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.choiceEditor {
+  display: grid;
+  gap: 8px;
+}
+
+.choiceInput {
+  display: grid;
+  grid-template-columns: auto 28px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.choiceInput span {
+  display: grid;
+  height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 11%, white);
+  color: var(--primary);
+  font-weight: 900;
+}
+
+.questionBankList {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.questionBankRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.questionBankTitle {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.questionBankTitle strong,
+.questionBankTitle span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.questionBankTitle strong {
+  color: var(--primary);
+  font-size: 13px;
+}
+
+.questionBankTitle span {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .checkRow {

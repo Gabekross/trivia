@@ -18,6 +18,9 @@ let sessionForm = {
   autoReveal: false,
   autoAdvanceAfterReveal: false
 };
+let operatorSecret = getStoredOperatorSecret();
+let questionBank = [];
+let questionForm = blankQuestionForm();
 let sessionId = null;
 let joinCode = null;
 let shareOrigin = window.location.origin;
@@ -162,6 +165,7 @@ function operatorView(snapshot) {
           <label class="checkRow"><input id="autoReveal" type="checkbox" ${snapshot.session.configuration.autoReveal ? "checked" : ""}><span>Auto reveal when question time ends</span></label>
           <label class="checkRow"><input id="autoAdvanceAfterReveal" type="checkbox" ${snapshot.session.configuration.autoAdvanceAfterReveal ? "checked" : ""}><span>Auto move on after reveal time</span></label>
         </div>
+        ${questionBuilder()}
         <button id="newSession" class="primaryBtn">Create Session</button>
         <div class="joinCard">
           <span class="eyebrow">Audience Join Code</span>
@@ -325,6 +329,75 @@ function publicLinks(snapshot) {
       ${linkRow("Operator", operatorUrl)}
     </section>
   `;
+}
+
+function questionBuilder() {
+  return `
+    <section class="questionBuilder stack">
+      <div class="sectionHeader inline"><span class="eyebrow">Question Bank</span><h2>Round Builder</h2></div>
+      <label class="label">Operator key<input id="operatorSecret" type="password" value="${escapeHtml(operatorSecret)}" placeholder="Required on Vercel"></label>
+      <div class="miniActions">
+        <button id="loadQuestions" class="secondaryBtn">Load</button>
+        <button id="newQuestion" class="secondaryBtn">New</button>
+      </div>
+      <label class="label">Prompt<textarea id="questionPrompt" rows="3">${escapeHtml(questionForm.prompt)}</textarea></label>
+      <div class="fieldGrid">
+        <label class="label">Category<input id="questionCategory" value="${escapeHtml(questionForm.category)}"></label>
+        <label class="label">Difficulty
+          <select id="questionDifficulty">
+            ${["easy", "medium", "hard"].map((level) => `<option value="${level}" ${questionForm.difficulty === level ? "selected" : ""}>${level}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      <div class="choiceEditor">
+        ${questionForm.choices.map((choice, index) => questionChoiceInput(choice, index)).join("")}
+      </div>
+      <label class="label">Explanation<textarea id="questionExplanation" rows="2">${escapeHtml(questionForm.explanation)}</textarea></label>
+      <button id="saveQuestion" class="primaryBtn">${questionForm.id ? "Update Question" : "Save Question"}</button>
+      <div class="questionBankList">
+        ${questionBank.length ? questionBank.map(questionBankRow).join("") : "<span class='muted'>Load the question bank to edit rounds.</span>"}
+      </div>
+    </section>
+  `;
+}
+
+function questionChoiceInput(choice, index) {
+  const label = String.fromCharCode(65 + index);
+  return `
+    <label class="choiceInput">
+      <input type="radio" name="correctChoice" value="${index}" ${choice.isCorrect ? "checked" : ""}>
+      <span>${label}</span>
+      <input data-choice-text="${index}" value="${escapeHtml(choice.text)}" placeholder="Answer choice ${label}">
+    </label>
+  `;
+}
+
+function questionBankRow(question) {
+  return `
+    <div class="questionBankRow">
+      <button class="questionBankTitle" data-edit-question="${question.id}">
+        <strong>${escapeHtml(question.prompt)}</strong>
+        <span>${escapeHtml(question.category)} - ${escapeHtml(question.difficulty)}</span>
+      </button>
+      <button class="copyLink" data-archive-question="${question.id}">Archive</button>
+    </div>
+  `;
+}
+
+function blankQuestionForm() {
+  return {
+    id: null,
+    category: "Family Fun",
+    difficulty: "easy",
+    prompt: "",
+    explanation: "",
+    choices: [
+      { text: "", isCorrect: true },
+      { text: "", isCorrect: false },
+      { text: "", isCorrect: false },
+      { text: "", isCorrect: false }
+    ]
+  };
 }
 
 function qrUrl(url) {
@@ -638,6 +711,42 @@ function bindEvents() {
   document.querySelector("#winnerMode")?.addEventListener("change", (event) => {
     sessionForm.winnerMode = event.target.value;
   });
+  document.querySelector("#operatorSecret")?.addEventListener("input", (event) => {
+    operatorSecret = event.target.value;
+    storeOperatorSecret(operatorSecret);
+  });
+  document.querySelector("#loadQuestions")?.addEventListener("click", loadQuestionBank);
+  document.querySelector("#newQuestion")?.addEventListener("click", async () => {
+    questionForm = blankQuestionForm();
+    await render();
+  });
+  document.querySelector("#saveQuestion")?.addEventListener("click", saveQuestionFromForm);
+  document.querySelectorAll("[data-edit-question]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const question = questionBank.find((item) => item.id === button.dataset.editQuestion);
+      if (!question) return;
+      questionForm = {
+        id: question.id,
+        category: question.category,
+        difficulty: question.difficulty,
+        prompt: question.prompt,
+        explanation: question.explanation,
+        choices: question.choices.slice(0, 4).map((choice) => ({ text: choice.text, isCorrect: choice.isCorrect }))
+      };
+      while (questionForm.choices.length < 4) questionForm.choices.push({ text: "", isCorrect: false });
+      await render();
+    });
+  });
+  document.querySelectorAll("[data-archive-question]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      try {
+        await operatorApi(`/api/questions/${encodeURIComponent(button.dataset.archiveQuestion)}`, { method: "DELETE" });
+        await loadQuestionBank();
+      } catch (error) {
+        showToast(error.message);
+      }
+    });
+  });
   document.querySelector("#displayEdit")?.addEventListener("click", async () => {
     displayEditMode = !displayEditMode;
     showDisplayControls();
@@ -769,6 +878,47 @@ function bindEvents() {
   });
 }
 
+async function loadQuestionBank() {
+  try {
+    const result = await operatorApi("/api/questions");
+    questionBank = result.questions;
+    await render();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function saveQuestionFromForm() {
+  try {
+    const correctIndex = Number(document.querySelector("input[name='correctChoice']:checked")?.value || 0);
+    const choices = [...document.querySelectorAll("[data-choice-text]")].map((input, index) => ({
+      text: input.value,
+      isCorrect: index === correctIndex
+    }));
+    const payload = {
+      category: document.querySelector("#questionCategory").value,
+      difficulty: document.querySelector("#questionDifficulty").value,
+      prompt: document.querySelector("#questionPrompt").value,
+      explanation: document.querySelector("#questionExplanation").value,
+      choices
+    };
+    const path = questionForm.id ? `/api/questions/${encodeURIComponent(questionForm.id)}` : "/api/questions";
+    const saved = await operatorApi(path, { method: questionForm.id ? "PUT" : "POST", body: JSON.stringify(payload) });
+    questionForm = {
+      id: saved.question.id,
+      category: saved.question.category,
+      difficulty: saved.question.difficulty,
+      prompt: saved.question.prompt,
+      explanation: saved.question.explanation,
+      choices: saved.question.choices.slice(0, 4).map((choice) => ({ text: choice.text, isCorrect: choice.isCorrect }))
+    };
+    while (questionForm.choices.length < 4) questionForm.choices.push({ text: "", isCorrect: false });
+    await loadQuestionBank();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
 function readSessionForm() {
   return {
     winnerMode: document.querySelector("#winnerMode").value,
@@ -854,6 +1004,16 @@ async function api(path, options = {}) {
   return body;
 }
 
+async function operatorApi(path, options = {}) {
+  return api(path, {
+    ...options,
+    headers: {
+      "x-operator-secret": operatorSecret,
+      ...(options.headers || {})
+    }
+  });
+}
+
 function setBusy(button, label, busy = true) {
   if (!button) return;
   button.disabled = busy;
@@ -873,6 +1033,22 @@ function hasEditableFocus() {
   const element = document.activeElement;
   if (!element) return false;
   return Boolean(element.closest("input, select, textarea, [contenteditable='true']"));
+}
+
+function getStoredOperatorSecret() {
+  try {
+    return sessionStorage.getItem("trivia.operatorSecret") || "";
+  } catch {
+    return "";
+  }
+}
+
+function storeOperatorSecret(value) {
+  try {
+    sessionStorage.setItem("trivia.operatorSecret", value || "");
+  } catch {
+    operatorSecret = value || "";
+  }
 }
 
 function pollInterval() {

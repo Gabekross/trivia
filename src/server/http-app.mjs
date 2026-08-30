@@ -65,6 +65,34 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
     return;
   }
 
+  if (request.method === "GET" && url.pathname === "/api/questions") {
+    if (!isOperatorAuthorized(request)) return sendUnauthorized(response);
+    sendJson(response, 200, { questions: await store.listQuestions() });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/questions") {
+    if (!isOperatorAuthorized(request)) return sendUnauthorized(response);
+    const question = await store.saveQuestion(await readJson(request));
+    sendJson(response, 201, { question });
+    return;
+  }
+
+  const questionMatch = url.pathname.match(/^\/api\/questions\/([^/]+)$/);
+  if (questionMatch && request.method === "PUT") {
+    if (!isOperatorAuthorized(request)) return sendUnauthorized(response);
+    const question = await store.saveQuestion({ ...(await readJson(request)), id: decodeURIComponent(questionMatch[1]) });
+    sendJson(response, 200, { question });
+    return;
+  }
+
+  if (questionMatch && request.method === "DELETE") {
+    if (!isOperatorAuthorized(request)) return sendUnauthorized(response);
+    const question = await store.archiveQuestion(decodeURIComponent(questionMatch[1]));
+    sendJson(response, 200, { question });
+    return;
+  }
+
   const joinCodeMatch = url.pathname.match(/^\/api\/join-codes\/([^/]+)$/);
   if (request.method === "GET" && joinCodeMatch) {
     const session = await store.findSessionByJoinCode(decodeURIComponent(joinCodeMatch[1]));
@@ -179,6 +207,17 @@ async function readJson(request) {
 
 function sendJson(response, status, payload) {
   send(response, status, "application/json; charset=utf-8", JSON.stringify(payload));
+}
+
+function sendUnauthorized(response) {
+  sendJson(response, 401, { error: "Operator authorization is required." });
+}
+
+function isOperatorAuthorized(request) {
+  const expected = process.env.OPERATOR_SESSION_SECRET;
+  if (!expected && process.env.NODE_ENV !== "production") return true;
+  if (!expected) return false;
+  return request.headers["x-operator-secret"] === expected;
 }
 
 function send(response, status, contentType, body) {

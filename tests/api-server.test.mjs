@@ -10,7 +10,7 @@ const baseUrl = `http://127.0.0.1:${port}`;
 test("dev server exposes trusted mutation API with persistence", async () => {
   await rm("data", { recursive: true, force: true });
   const server = spawn(process.execPath, ["scripts/dev-server.mjs"], {
-    env: { ...process.env, GAME_STORE: "json", NEXT_PUBLIC_SUPABASE_URL: "", NEXT_PUBLIC_SUPABASE_ANON_KEY: "", SUPABASE_SERVICE_ROLE_KEY: "", PORT: String(port) },
+    env: { ...process.env, GAME_STORE: "json", NEXT_PUBLIC_SUPABASE_URL: "", NEXT_PUBLIC_SUPABASE_ANON_KEY: "", SUPABASE_SERVICE_ROLE_KEY: "", OPERATOR_SESSION_SECRET: "test-operator-key", PORT: String(port) },
     stdio: ["ignore", "pipe", "pipe"]
   });
   try {
@@ -27,6 +27,28 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     const health = await api("/api/health");
     const clientConfig = await api("/api/client-config");
     const bootstrap = await api("/api/bootstrap");
+    const unauthorizedQuestions = await fetch(`${baseUrl}/api/questions`);
+    const savedQuestion = await operatorApi("/api/questions", {
+      method: "POST",
+      body: JSON.stringify({
+        category: "Family",
+        difficulty: "easy",
+        prompt: "Who is testing the question builder?",
+        explanation: "The operator wrote this question.",
+        choices: [
+          { text: "The operator", isCorrect: true },
+          { text: "The projector", isCorrect: false },
+          { text: "The timer", isCorrect: false },
+          { text: "The lobby", isCorrect: false }
+        ]
+      })
+    });
+    const editedQuestion = await operatorApi(`/api/questions/${savedQuestion.question.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ ...savedQuestion.question, difficulty: "medium" })
+    });
+    const questions = await operatorApi("/api/questions");
+    const archivedQuestion = await operatorApi(`/api/questions/${savedQuestion.question.id}`, { method: "DELETE" });
     const started = await api(`/api/sessions/${created.sessionId}/operator`, { method: "POST", body: JSON.stringify({ action: "START" }) });
     const operator = await api(`/api/sessions/${created.sessionId}/snapshot?role=OPERATOR`);
     const correct = operator.question.choices.find((choice) => choice.isCorrect);
@@ -51,6 +73,11 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     assert.equal(health.ok, true);
     assert.equal(health.store, "json");
     assert.equal(clientConfig.realtime, false);
+    assert.equal(unauthorizedQuestions.status, 401);
+    assert.equal(savedQuestion.question.choices.filter((choice) => choice.isCorrect).length, 1);
+    assert.equal(editedQuestion.question.difficulty, "medium");
+    assert.equal(questions.questions.some((question) => question.id === savedQuestion.question.id), true);
+    assert.equal(archivedQuestion.question.archived, true);
     assert.equal(byCode.sessionId, created.sessionId);
     assert.equal(qr.status, 200);
     assert.match(qrSvg, /<svg/);
@@ -76,6 +103,13 @@ async function waitForServer(server) {
     }
   }
   throw new Error("server did not become ready");
+}
+
+async function operatorApi(path, options = {}) {
+  return api(path, {
+    ...options,
+    headers: { "x-operator-secret": "test-operator-key", ...(options.headers || {}) }
+  });
 }
 
 async function api(path, options = {}) {

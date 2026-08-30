@@ -40,6 +40,25 @@ export class JsonGameStore extends GameStore {
     return this.engine.snapshot(sessionId, role, playerId);
   }
 
+  async listQuestions() {
+    await this.ready;
+    return this.engine.listQuestions();
+  }
+
+  async saveQuestion(question) {
+    await this.ready;
+    const saved = question.id ? this.engine.updateQuestion(question.id, question) : this.engine.addQuestion(question);
+    await this.persist();
+    return saved;
+  }
+
+  async archiveQuestion(questionId) {
+    await this.ready;
+    const question = this.engine.archiveQuestion(questionId);
+    await this.persist();
+    return question;
+  }
+
   async advanceTimers(sessionId) {
     await this.ready;
     const session = this.engine.advanceTimers(sessionId);

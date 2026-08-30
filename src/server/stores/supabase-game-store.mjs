@@ -47,6 +47,25 @@ export class SupabaseGameStore extends GameStore {
     return this.engine.snapshot(sessionId, role, playerId);
   }
 
+  async listQuestions() {
+    await this.prepare();
+    return this.engine.listQuestions();
+  }
+
+  async saveQuestion(question) {
+    await this.prepare();
+    const saved = question.id ? this.engine.updateQuestion(question.id, question) : this.engine.addQuestion(question);
+    await this.persist();
+    return saved;
+  }
+
+  async archiveQuestion(questionId) {
+    await this.prepare();
+    const question = this.engine.archiveQuestion(questionId);
+    await this.persist();
+    return question;
+  }
+
   async advanceTimers(sessionId) {
     await this.prepare();
     const session = this.engine.advanceTimers(sessionId);

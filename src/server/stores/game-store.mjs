@@ -15,6 +15,18 @@ export class GameStore {
     throw new Error("GameStore.getSnapshot is not implemented");
   }
 
+  async listQuestions() {
+    throw new Error("GameStore.listQuestions is not implemented");
+  }
+
+  async saveQuestion(question) {
+    throw new Error("GameStore.saveQuestion is not implemented");
+  }
+
+  async archiveQuestion(questionId) {
+    throw new Error("GameStore.archiveQuestion is not implemented");
+  }
+
   async advanceTimers(sessionId) {
     return { sessionId, advanced: false, eventType: null };
   }

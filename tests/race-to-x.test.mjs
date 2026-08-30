@@ -45,6 +45,32 @@ test("operator payload can see answer key", () => {
   assert.equal(snapshot.question.choices.filter((choice) => choice.isCorrect).length, 1);
 });
 
+test("operator can manage question bank without changing existing session question snapshots", () => {
+  const engine = new TriviaEngine();
+  const firstSession = engine.createSession();
+  const added = engine.addQuestion({
+    category: "Family",
+    difficulty: "easy",
+    prompt: "Who brought the best dessert?",
+    explanation: "This is a custom operator-authored question.",
+    choices: [
+      { text: "Auntie", isCorrect: true },
+      { text: "Uncle", isCorrect: false },
+      { text: "Cousin", isCorrect: false },
+      { text: "Grandma", isCorrect: false }
+    ]
+  });
+  const updated = engine.updateQuestion(added.id, { ...added, difficulty: "medium" });
+  const secondSession = engine.createSession();
+  const archived = engine.archiveQuestion(added.id);
+
+  assert.equal(updated.difficulty, "medium");
+  assert.equal(archived.archived, true);
+  assert.equal(firstSession.questionIds.includes(added.id), false);
+  assert.equal(secondSession.questionIds.includes(added.id), true);
+  assert.equal(engine.listQuestions().some((question) => question.id === added.id), false);
+});
+
 test("one answer is accepted per player per question", () => {
   const engine = new TriviaEngine();
   const session = engine.createSession({ targetCorrect: 3 });
