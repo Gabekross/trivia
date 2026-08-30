@@ -899,7 +899,7 @@ function bindEvents() {
       setBusy(button, "Working");
       actionInFlight = true;
       try {
-        const updated = await api(`/api/sessions/${sessionId}/operator`, { method: "POST", body: JSON.stringify({ action: button.dataset.action }) });
+        const updated = await operatorApi(`/api/sessions/${sessionId}/operator`, { method: "POST", body: JSON.stringify({ action: button.dataset.action }) });
         await render(updated.snapshot);
       } catch (error) {
         showToast(error.message);

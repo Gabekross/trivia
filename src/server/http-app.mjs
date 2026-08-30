@@ -166,6 +166,7 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
 
   const operatorMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/operator$/);
   if (request.method === "POST" && operatorMatch) {
+    if (!isOperatorAuthorized(request)) return sendUnauthorized(response);
     const body = await readJson(request);
     const updated = await store.operatorAction(operatorMatch[1], body.action);
     eventHub?.broadcast(updated.session.id, body.action);

@@ -67,7 +67,12 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     });
     const questions = await operatorApi("/api/questions");
     const archivedQuestion = await operatorApi(`/api/questions/${savedQuestion.question.id}`, { method: "DELETE" });
-    const started = await api(`/api/sessions/${created.sessionId}/operator`, { method: "POST", body: JSON.stringify({ action: "START" }) });
+    const unauthorizedOperator = await fetch(`${baseUrl}/api/sessions/${created.sessionId}/operator`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "START" })
+    });
+    const started = await operatorApi(`/api/sessions/${created.sessionId}/operator`, { method: "POST", body: JSON.stringify({ action: "START" }) });
     const operator = await api(`/api/sessions/${created.sessionId}/snapshot?role=OPERATOR`);
     const correct = operator.question.choices.find((choice) => choice.isCorrect);
 
@@ -102,6 +107,7 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     assert.equal(generatedDrafts.questions[0].generationMetadata.topic, "road trips");
     assert.equal(unauthorizedGenerate.status, 401);
     assert.equal(unauthorizedReview.status, 401);
+    assert.equal(unauthorizedOperator.status, 401);
     assert.equal(questions.questions.some((question) => question.id === savedQuestion.question.id), true);
     assert.equal(archivedQuestion.question.archived, true);
     assert.equal(byCode.sessionId, created.sessionId);
