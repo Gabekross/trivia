@@ -10,7 +10,17 @@ const baseUrl = `http://127.0.0.1:${port}`;
 test("dev server exposes trusted mutation API with persistence", async () => {
   await rm("data", { recursive: true, force: true });
   const server = spawn(process.execPath, ["scripts/dev-server.mjs"], {
-    env: { ...process.env, GAME_STORE: "json", NEXT_PUBLIC_SUPABASE_URL: "", NEXT_PUBLIC_SUPABASE_ANON_KEY: "", SUPABASE_SERVICE_ROLE_KEY: "", OPERATOR_SESSION_SECRET: "test-operator-key", PORT: String(port) },
+    env: {
+      ...process.env,
+      GAME_STORE: "json",
+      NEXT_PUBLIC_SUPABASE_URL: "",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "",
+      SUPABASE_SERVICE_ROLE_KEY: "",
+      OPERATOR_SESSION_SECRET: "test-operator-key",
+      RATE_LIMIT_QR_MAX: "1",
+      RATE_LIMIT_WINDOW_MS: "60000",
+      PORT: String(port)
+    },
     stdio: ["ignore", "pipe", "pipe"]
   });
   try {
@@ -84,6 +94,7 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     const byCode = await api(`/api/join-codes/${encodeURIComponent(paddedJoinCode)}`);
     const qr = await fetch(`${baseUrl}/api/qr?data=${encodeURIComponent(`${baseUrl}/trivia/session/${created.joinCode}`)}`);
     const qrSvg = await qr.text();
+    const limitedQr = await fetch(`${baseUrl}/api/qr?data=${encodeURIComponent(`${baseUrl}/trivia/session/${created.joinCode}`)}`);
     const displayRoute = await fetch(`${baseUrl}/trivia/display/${created.sessionId}`);
     const displayHtml = await displayRoute.text();
 
@@ -113,6 +124,8 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     assert.equal(byCode.sessionId, created.sessionId);
     assert.equal(qr.status, 200);
     assert.match(qrSvg, /<svg/);
+    assert.equal(limitedQr.status, 429);
+    assert.equal(limitedQr.headers.get("retry-after"), "60");
     assert.equal(typeof bootstrap.origins.current, "string");
     assert.equal(displayRoute.status, 200);
     assert.match(displayHtml, /Family Trivia Codex/);

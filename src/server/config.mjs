@@ -17,8 +17,10 @@ export function deploymentConfig(env = process.env) {
     if (!env.SUPABASE_SERVICE_ROLE_KEY) errors.push("SUPABASE_SERVICE_ROLE_KEY is required when GAME_STORE=supabase.");
   }
 
-  if (!env.OPERATOR_SESSION_SECRET) {
-    warnings.push("OPERATOR_SESSION_SECRET is not set; operator routes are not locked down yet.");
+  if (!env.OPERATOR_SESSION_SECRET && isProduction) {
+    errors.push("OPERATOR_SESSION_SECRET is required in production so operator routes stay locked down.");
+  } else if (!env.OPERATOR_SESSION_SECRET) {
+    warnings.push("OPERATOR_SESSION_SECRET is not set; development operator routes allow local testing.");
   }
 
   return {

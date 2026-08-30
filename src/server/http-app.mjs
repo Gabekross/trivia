@@ -9,6 +9,8 @@ const mime = {
   ".js": "text/javascript; charset=utf-8"
 };
 
+const rateLimitBuckets = new Map();
+
 export function createHttpApp({ store, webRoot = join(process.cwd(), "src", "web"), coreRoot = join(process.cwd(), "src", "core"), getOrigins, eventHub = null } = {}) {
   if (!store) throw new Error("createHttpApp requires a store");
 
@@ -27,6 +29,12 @@ export function createHttpApp({ store, webRoot = join(process.cwd(), "src", "web
 }
 
 async function handleApi({ request, response, url, store, getOrigins, eventHub }) {
+  const limited = applyRateLimit(request, url);
+  if (limited) {
+    sendRateLimited(response, limited);
+    return;
+  }
+
   if (request.method === "GET" && url.pathname === "/api/health") {
     const config = deploymentConfig();
     sendJson(response, config.ok ? 200 : 500, {
@@ -235,6 +243,53 @@ function isOperatorAuthorized(request) {
   if (!expected && process.env.NODE_ENV !== "production") return true;
   if (!expected) return false;
   return request.headers["x-operator-secret"] === expected;
+}
+
+function applyRateLimit(request, url) {
+  const rule = rateLimitRule(request, url);
+  if (!rule) return null;
+  const now = Date.now();
+  const windowMs = Number(process.env.RATE_LIMIT_WINDOW_MS || rule.windowMs);
+  const max = Number(process.env[rule.envMax] || rule.max);
+  const key = `${rule.name}:${clientIp(request)}:${rule.scope(url)}`;
+  const bucket = rateLimitBuckets.get(key) || { count: 0, resetAt: now + windowMs };
+  if (now >= bucket.resetAt) {
+    bucket.count = 0;
+    bucket.resetAt = now + windowMs;
+  }
+  bucket.count += 1;
+  rateLimitBuckets.set(key, bucket);
+  pruneRateLimitBuckets(now);
+  if (bucket.count <= max) return null;
+  return { retryAfter: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)), limit: max };
+}
+
+function rateLimitRule(request, url) {
+  if (request.method === "POST" && url.pathname === "/api/join") return { name: "join", envMax: "RATE_LIMIT_JOIN_MAX", max: 20, windowMs: 60_000, scope: () => "global" };
+  if (request.method === "POST" && /\/answers$/.test(url.pathname)) return { name: "answers", envMax: "RATE_LIMIT_ANSWER_MAX", max: 90, windowMs: 60_000, scope: (target) => target.pathname };
+  if (request.method === "POST" && url.pathname === "/api/questions/generate") return { name: "generate", envMax: "RATE_LIMIT_GENERATE_MAX", max: 12, windowMs: 60_000, scope: () => "operator" };
+  if (request.method === "GET" && url.pathname === "/api/qr") return { name: "qr", envMax: "RATE_LIMIT_QR_MAX", max: 120, windowMs: 60_000, scope: () => "global" };
+  return null;
+}
+
+function clientIp(request) {
+  return String(request.headers["x-forwarded-for"] || request.socket?.remoteAddress || "local").split(",")[0].trim() || "local";
+}
+
+function pruneRateLimitBuckets(now) {
+  if (rateLimitBuckets.size < 5000) return;
+  for (const [key, bucket] of rateLimitBuckets) {
+    if (now >= bucket.resetAt) rateLimitBuckets.delete(key);
+  }
+}
+
+function sendRateLimited(response, limited) {
+  response.writeHead(429, {
+    "content-type": "application/json; charset=utf-8",
+    "retry-after": String(limited.retryAfter),
+    "x-rate-limit-limit": String(limited.limit)
+  });
+  response.end(JSON.stringify({ error: "Too many requests. Please wait a moment and try again.", retryAfter: limited.retryAfter }));
 }
 
 function send(response, status, contentType, body) {

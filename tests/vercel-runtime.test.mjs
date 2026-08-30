@@ -16,6 +16,9 @@ test("Vercel entrypoint uses the shared HTTP app", async () => {
   assert.match(appSource, /polling: true/);
   assert.match(appSource, /api\/client-config/);
   assert.match(appSource, /api\/qr/);
+  assert.match(appSource, /applyRateLimit/);
+  assert.match(appSource, /sendRateLimited/);
+  assert.match(appSource, /RATE_LIMIT_JOIN_MAX/);
   assert.match(html, /supabase-js@2/);
   assert.match(clientSource, /postgres_changes/);
   assert.match(clientSource, /game_update_events/);
