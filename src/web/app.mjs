@@ -137,7 +137,9 @@ async function render(snapshotOverride = null) {
 async function snapshotForActiveTab() {
   const role = activeTab === "player" ? Role.PLAYER : activeTab === "operator" ? Role.OPERATOR : Role.DISPLAY;
   const player = role === Role.PLAYER && currentPlayerId ? `&playerId=${encodeURIComponent(currentPlayerId)}` : "";
-  return api(`/api/sessions/${sessionId}/snapshot?role=${role}${player}`);
+  return role === Role.OPERATOR
+    ? operatorApi(`/api/sessions/${sessionId}/snapshot?role=${role}`)
+    : api(`/api/sessions/${sessionId}/snapshot?role=${role}${player}`);
 }
 
 function tabButton(id, label) {
@@ -861,7 +863,7 @@ function bindEvents() {
     sessionForm = readSessionForm();
     actionInFlight = true;
     try {
-      const created = await api("/api/sessions", {
+      const created = await operatorApi("/api/sessions", {
         method: "POST",
         body: JSON.stringify({
           title: document.querySelector("#title").value,

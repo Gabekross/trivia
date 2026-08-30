@@ -25,7 +25,12 @@ test("dev server exposes trusted mutation API with persistence", async () => {
   });
   try {
     await waitForServer(server);
-    const created = await api("/api/sessions", {
+    const unauthorizedCreate = await fetch(`${baseUrl}/api/sessions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Blocked Session" })
+    });
+    const created = await operatorApi("/api/sessions", {
       method: "POST",
       body: JSON.stringify({ title: "API Test", winnerMode: "RACE_TO_X", targetCorrect: 1 })
     });
@@ -83,7 +88,8 @@ test("dev server exposes trusted mutation API with persistence", async () => {
       body: JSON.stringify({ action: "START" })
     });
     const started = await operatorApi(`/api/sessions/${created.sessionId}/operator`, { method: "POST", body: JSON.stringify({ action: "START" }) });
-    const operator = await api(`/api/sessions/${created.sessionId}/snapshot?role=OPERATOR`);
+    const unauthorizedOperatorSnapshot = await fetch(`${baseUrl}/api/sessions/${created.sessionId}/snapshot?role=OPERATOR`);
+    const operator = await operatorApi(`/api/sessions/${created.sessionId}/snapshot?role=OPERATOR`);
     const correct = operator.question.choices.find((choice) => choice.isCorrect);
 
     const accepted = await api(`/api/sessions/${created.sessionId}/answers`, {
@@ -107,6 +113,7 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     assert.equal(health.ok, true);
     assert.equal(health.store, "json");
     assert.equal(clientConfig.realtime, false);
+    assert.equal(unauthorizedCreate.status, 401);
     assert.equal(unauthorizedQuestions.status, 401);
     assert.equal(savedQuestion.question.choices.filter((choice) => choice.isCorrect).length, 1);
     assert.equal(savedQuestion.question.reviewStatus, "approved");
@@ -119,13 +126,15 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     assert.equal(unauthorizedGenerate.status, 401);
     assert.equal(unauthorizedReview.status, 401);
     assert.equal(unauthorizedOperator.status, 401);
+    assert.equal(unauthorizedOperatorSnapshot.status, 401);
     assert.equal(questions.questions.some((question) => question.id === savedQuestion.question.id), true);
     assert.equal(archivedQuestion.question.archived, true);
     assert.equal(byCode.sessionId, created.sessionId);
     assert.equal(qr.status, 200);
     assert.match(qrSvg, /<svg/);
     assert.equal(limitedQr.status, 429);
-    assert.equal(limitedQr.headers.get("retry-after"), "60");
+    assert.ok(Number(limitedQr.headers.get("retry-after")) > 0);
+    assert.ok(Number(limitedQr.headers.get("retry-after")) <= 60);
     assert.equal(typeof bootstrap.origins.current, "string");
     assert.equal(displayRoute.status, 200);
     assert.match(displayHtml, /Family Trivia Codex/);

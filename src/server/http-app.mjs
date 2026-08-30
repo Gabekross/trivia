@@ -131,6 +131,7 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
   const snapshotMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/snapshot$/);
   if (request.method === "GET" && snapshotMatch) {
     const role = url.searchParams.get("role") || "DISPLAY";
+    if (role === "OPERATOR" && !isOperatorAuthorized(request)) return sendUnauthorized(response);
     const playerId = url.searchParams.get("playerId");
     await advanceTimers({ store, eventHub, sessionId: snapshotMatch[1] });
     sendJson(response, 200, await store.getSnapshot(snapshotMatch[1], role, playerId));
@@ -148,6 +149,7 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
   }
 
   if (request.method === "POST" && url.pathname === "/api/sessions") {
+    if (!isOperatorAuthorized(request)) return sendUnauthorized(response);
     const created = await store.createSession(await readJson(request));
     eventHub?.broadcast(created.sessionId, "SESSION_CREATED");
     await store.publishEvent(created.sessionId, "SESSION_CREATED");
