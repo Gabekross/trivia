@@ -19,6 +19,7 @@ test("Vercel entrypoint uses the shared HTTP app", async () => {
   assert.match(appSource, /applyRateLimit/);
   assert.match(appSource, /sendRateLimited/);
   assert.match(appSource, /RATE_LIMIT_JOIN_MAX/);
+  assert.match(appSource, /PLAYER_RECONNECTED/);
   assert.match(html, /supabase-js@2/);
   assert.match(clientSource, /postgres_changes/);
   assert.match(clientSource, /game_update_events/);
@@ -30,6 +31,7 @@ test("Vercel entrypoint uses the shared HTTP app", async () => {
   assert.match(clientSource, /actionInFlight/);
   assert.match(clientSource, /!snapshotOverride && actionInFlight/);
   assert.match(clientSource, /joinCode: document\.querySelector\("#joinCode"\)\.value\.trim\(\)/);
+  assert.match(clientSource, /playerId: currentPlayerId \|\| getStoredPlayerId\(\)/);
   assert.match(clientSource, /!hasEditableFocus\(\) && !actionInFlight/);
   assert.match(clientSource, /route-\$\{activeTab\}/);
   assert.match(clientSource, /activeTab === "player" \? ""/);

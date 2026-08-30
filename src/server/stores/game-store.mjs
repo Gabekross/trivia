@@ -39,7 +39,7 @@ export class GameStore {
     return { sessionId, advanced: false, eventType: null };
   }
 
-  async joinSession(joinCode, displayName) {
+  async joinSession(joinCode, displayName, options = {}) {
     throw new Error("GameStore.joinSession is not implemented");
   }
 

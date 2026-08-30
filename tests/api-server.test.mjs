@@ -88,6 +88,10 @@ test("dev server exposes trusted mutation API with persistence", async () => {
       body: JSON.stringify({ action: "START" })
     });
     const started = await operatorApi(`/api/sessions/${created.sessionId}/operator`, { method: "POST", body: JSON.stringify({ action: "START" }) });
+    const rejoined = await api("/api/join", {
+      method: "POST",
+      body: JSON.stringify({ joinCode: created.joinCode, displayName: "", playerId: joined.playerId })
+    });
     const unauthorizedOperatorSnapshot = await fetch(`${baseUrl}/api/sessions/${created.sessionId}/snapshot?role=OPERATOR`);
     const operator = await operatorApi(`/api/sessions/${created.sessionId}/snapshot?role=OPERATOR`);
     const correct = operator.question.choices.find((choice) => choice.isCorrect);
@@ -109,6 +113,9 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     assert.equal(created.snapshot.session.id, created.sessionId);
     assert.equal(joined.snapshot.player.id, joined.playerId);
     assert.equal(started.snapshot.session.status, "QUESTION_ACTIVE");
+    assert.equal(rejoined.playerId, joined.playerId);
+    assert.equal(rejoined.reconnected, true);
+    assert.equal(rejoined.snapshot.session.playerCount, 1);
     assert.equal(accepted.snapshot.player.currentAnswer.choiceId, correct.id);
     assert.equal(health.ok, true);
     assert.equal(health.store, "json");

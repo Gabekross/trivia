@@ -130,6 +130,20 @@ test("generated question drafts require review before entering sessions", () => 
   assert.equal(approvedSession.questionIds.includes(drafts[1].id), false);
 });
 
+test("stored player id can reconnect after the lobby closes without duplicating", () => {
+  const engine = new TriviaEngine();
+  const session = engine.createSession({ targetCorrect: 3 });
+  const player = engine.joinSession(session.joinCode, "Avery");
+  engine.operatorAction(session.id, "START");
+  const reconnected = engine.joinSession(session.joinCode, "", { playerId: player.id });
+
+  assert.equal(reconnected.id, player.id);
+  assert.equal(reconnected.reconnected, true);
+  assert.equal(session.players.size, 1);
+  assert.equal(session.auditLog.at(-1).eventType, "PLAYER_RECONNECTED");
+  assert.throws(() => engine.joinSession(session.joinCode, "New Player"), /no longer accepting/);
+});
+
 test("one answer is accepted per player per question", () => {
   const engine = new TriviaEngine();
   const session = engine.createSession({ targetCorrect: 3 });

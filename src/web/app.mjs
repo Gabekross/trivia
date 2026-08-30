@@ -916,7 +916,7 @@ function bindEvents() {
     setBusy(button, "Joining");
     actionInFlight = true;
     try {
-      const joined = await api("/api/join", { method: "POST", body: JSON.stringify({ joinCode: document.querySelector("#joinCode").value.trim(), displayName: document.querySelector("#displayName").value }) });
+      const joined = await api("/api/join", { method: "POST", body: JSON.stringify({ joinCode: document.querySelector("#joinCode").value.trim(), displayName: document.querySelector("#displayName").value, playerId: currentPlayerId || getStoredPlayerId() }) });
       sessionId = joined.sessionId;
       currentPlayerId = joined.playerId;
       landingJoinCode = null;

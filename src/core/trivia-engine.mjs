@@ -124,6 +124,15 @@ function normalizedText(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+function withReconnectFlag(player, reconnected) {
+  Object.defineProperty(player, "reconnected", {
+    value: reconnected,
+    enumerable: false,
+    configurable: true
+  });
+  return player;
+}
+
 function clampNumber(value, min, max, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
@@ -376,9 +385,14 @@ export class TriviaEngine {
     return questionIds.map((id) => this.questionForSession(session, id)).filter(Boolean);
   }
 
-  joinSession(joinCode, displayName) {
+  joinSession(joinCode, displayName, { playerId = null } = {}) {
     const session = this.findSessionByJoinCode(joinCode);
     if (!session) throw new Error("Join code not found");
+    const recoveredPlayer = playerId ? session.players.get(playerId) : null;
+    if (recoveredPlayer) {
+      this.touch(session, "PLAYER_RECONNECTED", { playerId: recoveredPlayer.id });
+      return withReconnectFlag(recoveredPlayer, true);
+    }
     if (session.status !== SessionStatus.LOBBY) throw new Error("This session is no longer accepting new players");
     if (session.players.size >= session.configurationSnapshot.maxPlayers) throw new Error("Session is full");
 
@@ -406,7 +420,7 @@ export class TriviaEngine {
     getRule(session.configurationSnapshot.winnerRule.type).initializePlayer?.(player, session.configurationSnapshot.winnerRule);
     session.players.set(player.id, player);
     this.touch(session, "PLAYER_JOINED", { playerId: player.id });
-    return player;
+    return withReconnectFlag(player, false);
   }
 
   operatorAction(sessionId, action) {

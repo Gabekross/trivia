@@ -82,9 +82,9 @@ export class JsonGameStore extends GameStore {
     return { sessionId, advanced: true, eventType, session };
   }
 
-  async joinSession(joinCode, displayName) {
+  async joinSession(joinCode, displayName, options = {}) {
     await this.ready;
-    const player = this.engine.joinSession(joinCode, displayName);
+    const player = this.engine.joinSession(joinCode, displayName, options);
     const session = this.engine.findSessionByJoinCode(joinCode);
     await this.persist();
     return { sessionId: session.id, joinCode: session.joinCode, playerId: player.id, player, session };
