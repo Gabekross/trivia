@@ -163,7 +163,7 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
 
   if (request.method === "POST" && url.pathname === "/api/join") {
     const body = await readJson(request);
-    const joined = await store.joinSession(body.joinCode, body.displayName, { playerId: body.playerId });
+    const joined = await store.joinSession(body.joinCode, body.displayName, { playerId: body.playerId, pairCode: body.pairCode });
     const eventType = joined.player.reconnected ? "PLAYER_RECONNECTED" : "PLAYER_JOINED";
     eventHub?.broadcast(joined.sessionId, eventType);
     await store.publishEvent(joined.sessionId, eventType);

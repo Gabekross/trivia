@@ -92,6 +92,14 @@ test("dev server exposes trusted mutation API with persistence", async () => {
       method: "POST",
       body: JSON.stringify({ joinCode: created.joinCode, displayName: "", playerId: joined.playerId })
     });
+    const couplesSession = await operatorApi("/api/sessions", {
+      method: "POST",
+      body: JSON.stringify({ title: "Couples Test", winnerMode: "COUPLES_MATCH", targetCoupleMatches: 1 })
+    });
+    const couplePlayer = await api("/api/join", {
+      method: "POST",
+      body: JSON.stringify({ joinCode: couplesSession.joinCode, displayName: "Partner One", pairCode: "Table 4" })
+    });
     const unauthorizedOperatorSnapshot = await fetch(`${baseUrl}/api/sessions/${created.sessionId}/snapshot?role=OPERATOR`);
     const operator = await operatorApi(`/api/sessions/${created.sessionId}/snapshot?role=OPERATOR`);
     const correct = operator.question.choices.find((choice) => choice.isCorrect);
@@ -116,6 +124,8 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     assert.equal(rejoined.playerId, joined.playerId);
     assert.equal(rejoined.reconnected, true);
     assert.equal(rejoined.snapshot.session.playerCount, 1);
+    assert.equal(couplesSession.snapshot.session.winnerRule.type, "COUPLES_MATCH");
+    assert.equal(couplePlayer.snapshot.player.progress.pairCode, "Table 4");
     assert.equal(accepted.snapshot.player.currentAnswer.choiceId, correct.id);
     assert.equal(health.ok, true);
     assert.equal(health.store, "json");

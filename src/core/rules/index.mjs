@@ -1,3 +1,4 @@
+import { couplesMatchRule } from "./couples-match.mjs";
 import { highestScoreRule } from "./highest-score.mjs";
 import { hotStreakRule } from "./hot-streak.mjs";
 import { lastPlayerStandingRule } from "./last-player-standing.mjs";
@@ -5,7 +6,7 @@ import { raceToXRule } from "./race-to-x.mjs";
 import { threeLivesRule } from "./three-lives.mjs";
 import { tournamentRule } from "./tournament.mjs";
 
-export const rules = [raceToXRule, hotStreakRule, threeLivesRule, lastPlayerStandingRule, highestScoreRule, tournamentRule];
+export const rules = [raceToXRule, hotStreakRule, threeLivesRule, lastPlayerStandingRule, highestScoreRule, tournamentRule, couplesMatchRule];
 export const ruleRegistry = new Map(rules.map((rule) => [rule.type, rule]));
 
 export function getRule(type) {

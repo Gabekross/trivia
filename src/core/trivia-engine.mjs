@@ -133,6 +133,10 @@ function withReconnectFlag(player, reconnected) {
   return player;
 }
 
+function sanitizePairCode(value) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, 32) || null;
+}
+
 function clampNumber(value, min, max, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
@@ -215,6 +219,7 @@ function defaultConfiguration(input = {}) {
   const winnerRule = configureWinnerRule(input.winnerRule || {
     type: input.winnerMode || "RACE_TO_X",
     targetCorrect: input.targetCorrect,
+    targetCoupleMatches: input.targetCoupleMatches,
     requiredStreak: input.requiredStreak,
     startingLives: input.startingLives,
     questionLimit: input.questionLimit,
@@ -253,6 +258,8 @@ export class TriviaEngine {
         players: [...session.players.values()],
         answers: [...session.answers.values()],
         idempotencyKeys: [],
+        coupleScores: session.coupleScores || {},
+        coupleQuestionAwards: session.coupleQuestionAwards || {},
         auditLog: session.auditLog,
         winners: session.winners
       }))
@@ -274,6 +281,8 @@ export class TriviaEngine {
         players: new Map((saved.players || []).map((player) => [player.id, player])),
         answers: new Map((saved.answers || []).map((answer) => [`${answer.questionId}:${answer.playerId}`, answer])),
         idempotencyKeys: new Map(),
+        coupleScores: saved.coupleScores || {},
+        coupleQuestionAwards: saved.coupleQuestionAwards || {},
         winners: saved.winners || [],
         auditLog: saved.auditLog || []
       };
@@ -296,6 +305,8 @@ export class TriviaEngine {
       players: new Map(),
       answers: new Map(),
       idempotencyKeys: new Map(),
+      coupleScores: {},
+      coupleQuestionAwards: {},
       winners: [],
       createdAt: nowIso(this.clock),
       updatedAt: nowIso(this.clock),
@@ -385,7 +396,7 @@ export class TriviaEngine {
     return questionIds.map((id) => this.questionForSession(session, id)).filter(Boolean);
   }
 
-  joinSession(joinCode, displayName, { playerId = null } = {}) {
+  joinSession(joinCode, displayName, { playerId = null, pairCode = null } = {}) {
     const session = this.findSessionByJoinCode(joinCode);
     if (!session) throw new Error("Join code not found");
     const recoveredPlayer = playerId ? session.players.get(playerId) : null;
@@ -414,6 +425,7 @@ export class TriviaEngine {
       streak: 0,
       lives: 3,
       points: 0,
+      pairCode: sanitizePairCode(pairCode),
       joinOrder: session.players.size + 1,
       joinedAt: nowIso(this.clock)
     };
@@ -549,6 +561,8 @@ export class TriviaEngine {
     session.questionActivatedAt = null;
     session.answers.clear();
     session.idempotencyKeys.clear();
+    session.coupleScores = {};
+    session.coupleQuestionAwards = {};
     session.winners = [];
     session.status = SessionStatus.LOBBY;
     return this.touch(session, "SESSION_RESET", {});
@@ -610,7 +624,7 @@ export class TriviaEngine {
             currentAnswer: playerAnswer
               ? { choiceId: playerAnswer.choiceId, isCorrect: reveal ? playerAnswer.isCorrect : undefined, acceptedAt: playerAnswer.acceptedAt }
               : null,
-            progress: getRule(session.configurationSnapshot.winnerRule.type).progress(player, session.configurationSnapshot.winnerRule)
+            progress: getRule(session.configurationSnapshot.winnerRule.type).progress(player, session.configurationSnapshot.winnerRule, session)
           }
         : null
     };

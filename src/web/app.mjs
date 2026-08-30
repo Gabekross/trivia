@@ -9,6 +9,7 @@ let displaySettings = { safeArea: 42, scale: 100, vertical: 0, brightness: 100 }
 let sessionForm = {
   winnerMode: "RACE_TO_X",
   targetCorrect: 2,
+  targetCoupleMatches: 3,
   requiredStreak: 3,
   startingLives: 3,
   questionLimit: 3,
@@ -158,11 +159,12 @@ function operatorView(snapshot) {
         <label class="label">Game title<input id="title" value="${escapeHtml(snapshot.session.title)}"></label>
         <label class="label">Winner mode
           <select id="winnerMode">
-            ${snapshot.session.ruleOptions.map((option) => `<option value="${option.type}" ${snapshot.session.winnerRule.type === option.type ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
+          ${snapshot.session.ruleOptions.map((option) => `<option value="${option.type}" ${snapshot.session.winnerRule.type === option.type ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
           </select>
         </label>
         <div class="fieldGrid">
           <label class="label">Race target<input id="target" type="number" min="1" max="50" value="${sessionForm.targetCorrect}"></label>
+          <label class="label">Couple target<input id="targetCoupleMatches" type="number" min="1" max="20" value="${sessionForm.targetCoupleMatches}"></label>
           <label class="label">Required streak<input id="requiredStreak" type="number" min="1" max="20" value="${sessionForm.requiredStreak}"></label>
           <label class="label">Starting lives<input id="startingLives" type="number" min="1" max="10" value="${sessionForm.startingLives}"></label>
           <label class="label">Question limit<input id="questionLimit" type="number" min="1" max="25" value="${sessionForm.questionLimit}"></label>
@@ -317,6 +319,7 @@ function joinPanel(snapshot) {
       <div class="joinPanel stack">
         <label class="label">Join code<input id="joinCode" value="${joinValue}" inputmode="text" autocomplete="off"></label>
         <label class="label">Name<input id="displayName" value="" placeholder="Your name" autocomplete="name"></label>
+        ${snapshot.session.winnerRule.type === "COUPLES_MATCH" ? `<label class="label">Couple code<input id="pairCode" value="" placeholder="Use the same code as your partner" autocomplete="off"></label>` : ""}
         <button id="join" class="primaryBtn">Join Game</button>
       </div>
     </section>
@@ -713,6 +716,7 @@ function ruleSummary(rule) {
   if (rule.type === "LAST_PLAYER_STANDING") return "Last player standing";
   if (rule.type === "HIGHEST_SCORE") return `Highest score after ${rule.questionLimit}`;
   if (rule.type === "TOURNAMENT") return `Top ${rule.advanceCount} after ${rule.questionLimit}`;
+  if (rule.type === "COUPLES_MATCH") return `Couples match ${rule.targetCoupleMatches}`;
   return `Race to ${rule.targetCorrect}`;
 }
 
@@ -722,6 +726,7 @@ function ruleLabel(rule) {
   if (rule.type === "LAST_PLAYER_STANDING") return "Last Player Standing";
   if (rule.type === "HIGHEST_SCORE") return "Highest Score";
   if (rule.type === "TOURNAMENT") return "Tournament";
+  if (rule.type === "COUPLES_MATCH") return "Couples Match";
   return "Race to X";
 }
 
@@ -731,6 +736,7 @@ function ruleIntro(rule) {
   if (rule.type === "LAST_PLAYER_STANDING") return "One wrong answer knocks you out. Stay alive longer than the room.";
   if (rule.type === "HIGHEST_SCORE") return `Score the most points across ${rule.questionLimit} questions.`;
   if (rule.type === "TOURNAMENT") return `Earn a top ${rule.advanceCount} spot after ${rule.questionLimit} questions.`;
+  if (rule.type === "COUPLES_MATCH") return `Share a couple code with your partner. Both partners must answer correctly to score a couple match.`;
   return `Be first to ${rule.targetCorrect} correct answers. Fast correct answers break ties.`;
 }
 
@@ -740,6 +746,7 @@ function ruleSteps(rule) {
   if (rule.type === "LAST_PLAYER_STANDING") return ["Answer carefully.", "One wrong answer eliminates you.", "Last active player wins."];
   if (rule.type === "HIGHEST_SCORE") return ["Correct answers score points.", "Every player answers each round.", "Highest score at the limit wins."];
   if (rule.type === "TOURNAMENT") return ["Correct answers score points.", "Rankings decide who advances.", "Top players continue as finalists."];
+  if (rule.type === "COUPLES_MATCH") return ["Enter the same couple code as your partner.", "Both partners answer each round.", "A couple point scores only when both are correct."];
   return ["Answer each question quickly.", "Correct answers move you toward the target.", "First to the target wins."];
 }
 
@@ -750,6 +757,7 @@ function playerRuleHud(progress) {
   if (progress.ruleType === "LAST_PLAYER_STANDING") return progress.status === "ACTIVE" ? "Still standing" : "Spectator mode";
   if (progress.ruleType === "HIGHEST_SCORE") return `${progress.points} points before final ranking`;
   if (progress.ruleType === "TOURNAMENT") return `${progress.points} points · Top ${progress.advanceCount} advance`;
+  if (progress.ruleType === "COUPLES_MATCH") return `${progress.coupleScore}/${progress.targetCoupleMatches} couple matches`;
   return `${progress.correctCount}/${progress.targetCorrect} correct`;
 }
 
@@ -869,6 +877,7 @@ function bindEvents() {
           title: document.querySelector("#title").value,
           winnerMode: sessionForm.winnerMode,
           targetCorrect: sessionForm.targetCorrect,
+          targetCoupleMatches: sessionForm.targetCoupleMatches,
           requiredStreak: sessionForm.requiredStreak,
           startingLives: sessionForm.startingLives,
           questionLimit: sessionForm.questionLimit,
@@ -916,7 +925,7 @@ function bindEvents() {
     setBusy(button, "Joining");
     actionInFlight = true;
     try {
-      const joined = await api("/api/join", { method: "POST", body: JSON.stringify({ joinCode: document.querySelector("#joinCode").value.trim(), displayName: document.querySelector("#displayName").value, playerId: currentPlayerId || getStoredPlayerId() }) });
+      const joined = await api("/api/join", { method: "POST", body: JSON.stringify({ joinCode: document.querySelector("#joinCode").value.trim(), displayName: document.querySelector("#displayName").value, pairCode: document.querySelector("#pairCode")?.value || "", playerId: currentPlayerId || getStoredPlayerId() }) });
       sessionId = joined.sessionId;
       currentPlayerId = joined.playerId;
       landingJoinCode = null;
@@ -1038,6 +1047,7 @@ function readSessionForm() {
   return {
     winnerMode: document.querySelector("#winnerMode").value,
     targetCorrect: Number(document.querySelector("#target").value),
+    targetCoupleMatches: Number(document.querySelector("#targetCoupleMatches").value),
     requiredStreak: Number(document.querySelector("#requiredStreak").value),
     startingLives: Number(document.querySelector("#startingLives").value),
     questionLimit: Number(document.querySelector("#questionLimit").value),

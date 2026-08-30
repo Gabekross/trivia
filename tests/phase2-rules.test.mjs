@@ -7,7 +7,7 @@ import { PlayerStatus } from "../src/core/types.mjs";
 test("rule registry exposes Phase 2 launch modes", () => {
   assert.deepEqual(
     ruleOptions().map((rule) => rule.type),
-    ["RACE_TO_X", "HOT_STREAK", "THREE_LIVES", "LAST_PLAYER_STANDING", "HIGHEST_SCORE", "TOURNAMENT"]
+    ["RACE_TO_X", "HOT_STREAK", "THREE_LIVES", "LAST_PLAYER_STANDING", "HIGHEST_SCORE", "TOURNAMENT", "COUPLES_MATCH"]
   );
 });
 
@@ -113,6 +113,34 @@ test("Tournament records advancing players at configured cutoff", () => {
   assert.equal(session.winners[0].ruleType, "TOURNAMENT");
   assert.deepEqual(session.winners[0].metadata.advancingPlayerIds, [one.id, two.id]);
   assert.equal(three.status, PlayerStatus.SPECTATOR);
+});
+
+test("Couples Match scores only when both partners answer correctly", () => {
+  const engine = new TriviaEngine();
+  const session = engine.createSession({ winnerMode: "COUPLES_MATCH", targetCoupleMatches: 1 });
+  const firstPartner = engine.joinSession(session.joinCode, "First Partner", { pairCode: "Team A" });
+  const secondPartner = engine.joinSession(session.joinCode, "Second Partner", { pairCode: "Team A" });
+  const solo = engine.joinSession(session.joinCode, "Solo", { pairCode: "Solo" });
+  engine.operatorAction(session.id, "START");
+  const wrongChoice = activeQuestion(engine, session).choices.find((choice) => !choice.isCorrect);
+
+  engine.submitAnswer({ sessionId: session.id, playerId: firstPartner.id, choiceId: correctChoice(engine, session).id });
+  assert.equal(session.winners.length, 0);
+  engine.submitAnswer({ sessionId: session.id, playerId: solo.id, choiceId: correctChoice(engine, session).id });
+  assert.equal(session.winners.length, 0);
+  engine.submitAnswer({ sessionId: session.id, playerId: secondPartner.id, choiceId: wrongChoice.id });
+  assert.equal(session.winners.length, 0);
+
+  engine.operatorAction(session.id, "REVEAL");
+  engine.operatorAction(session.id, "SHOW_LEADERBOARD");
+  engine.operatorAction(session.id, "NEXT_QUESTION");
+  engine.submitAnswer({ sessionId: session.id, playerId: firstPartner.id, choiceId: correctChoice(engine, session).id });
+  engine.submitAnswer({ sessionId: session.id, playerId: secondPartner.id, choiceId: correctChoice(engine, session).id });
+
+  assert.equal(session.winners[0].ruleType, "COUPLES_MATCH");
+  assert.deepEqual(session.winners[0].metadata.partnerPlayerIds, [firstPartner.id, secondPartner.id]);
+  assert.equal(session.winners[0].metadata.coupleScore, 1);
+  assert.equal(engine.snapshot(session.id, "PLAYER", firstPartner.id).player.progress.coupleScore, 1);
 });
 
 function activeQuestion(engine, session) {
