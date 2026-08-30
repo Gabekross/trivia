@@ -78,6 +78,15 @@ async function handleApi({ request, response, url, store, getOrigins, eventHub }
     return;
   }
 
+  const questionReviewMatch = url.pathname.match(/^\/api\/questions\/([^/]+)\/review$/);
+  if (questionReviewMatch && request.method === "POST") {
+    if (!isOperatorAuthorized(request)) return sendUnauthorized(response);
+    const body = await readJson(request);
+    const question = await store.reviewQuestion(decodeURIComponent(questionReviewMatch[1]), body.action);
+    sendJson(response, 200, { question });
+    return;
+  }
+
   const questionMatch = url.pathname.match(/^\/api\/questions\/([^/]+)$/);
   if (questionMatch && request.method === "PUT") {
     if (!isOperatorAuthorized(request)) return sendUnauthorized(response);

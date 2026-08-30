@@ -27,6 +27,10 @@ export class GameStore {
     throw new Error("GameStore.archiveQuestion is not implemented");
   }
 
+  async reviewQuestion(questionId, action) {
+    throw new Error("GameStore.reviewQuestion is not implemented");
+  }
+
   async advanceTimers(sessionId) {
     return { sessionId, advanced: false, eventType: null };
   }

@@ -47,6 +47,15 @@ test("dev server exposes trusted mutation API with persistence", async () => {
       method: "PUT",
       body: JSON.stringify({ ...savedQuestion.question, difficulty: "medium" })
     });
+    const reviewedQuestion = await operatorApi(`/api/questions/${savedQuestion.question.id}/review`, {
+      method: "POST",
+      body: JSON.stringify({ action: "LOCK" })
+    });
+    const unauthorizedReview = await fetch(`${baseUrl}/api/questions/${savedQuestion.question.id}/review`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "APPROVE" })
+    });
     const questions = await operatorApi("/api/questions");
     const archivedQuestion = await operatorApi(`/api/questions/${savedQuestion.question.id}`, { method: "DELETE" });
     const started = await api(`/api/sessions/${created.sessionId}/operator`, { method: "POST", body: JSON.stringify({ action: "START" }) });
@@ -75,7 +84,11 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     assert.equal(clientConfig.realtime, false);
     assert.equal(unauthorizedQuestions.status, 401);
     assert.equal(savedQuestion.question.choices.filter((choice) => choice.isCorrect).length, 1);
+    assert.equal(savedQuestion.question.reviewStatus, "approved");
+    assert.equal(Array.isArray(savedQuestion.question.validationWarnings), true);
     assert.equal(editedQuestion.question.difficulty, "medium");
+    assert.equal(reviewedQuestion.question.reviewStatus, "locked");
+    assert.equal(unauthorizedReview.status, 401);
     assert.equal(questions.questions.some((question) => question.id === savedQuestion.question.id), true);
     assert.equal(archivedQuestion.question.archived, true);
     assert.equal(byCode.sessionId, created.sessionId);

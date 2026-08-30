@@ -59,6 +59,13 @@ export class JsonGameStore extends GameStore {
     return question;
   }
 
+  async reviewQuestion(questionId, action) {
+    await this.ready;
+    const question = this.engine.reviewQuestion(questionId, action);
+    await this.persist();
+    return question;
+  }
+
   async advanceTimers(sessionId) {
     await this.ready;
     const session = this.engine.advanceTimers(sessionId);

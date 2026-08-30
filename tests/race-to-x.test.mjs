@@ -71,6 +71,40 @@ test("operator can manage question bank without changing existing session questi
   assert.equal(engine.listQuestions().some((question) => question.id === added.id), false);
 });
 
+test("question validation warnings and review status control playable bank", () => {
+  const engine = new TriviaEngine();
+  const draft = engine.addQuestion({
+    category: "General Knowledge",
+    difficulty: "easy",
+    prompt: "Which family member tells this story",
+    reviewStatus: "needs_review",
+    choices: [
+      { text: "Jordan", isCorrect: true },
+      { text: "Jordan", isCorrect: false },
+      { text: "Taylor", isCorrect: false }
+    ]
+  });
+  const reviewSession = engine.createSession();
+  const rejected = engine.reviewQuestion(draft.id, "REJECT");
+  const rejectedSession = engine.createSession();
+  const approved = engine.reviewQuestion(draft.id, "APPROVE");
+  const approvedSession = engine.createSession();
+  const locked = engine.reviewQuestion(draft.id, "LOCK");
+
+  assert.equal(draft.reviewStatus, "needs_review");
+  assert.equal(draft.validationStatus, "warning");
+  assert.ok(draft.validationWarnings.includes("Prompt may need a clear question mark."));
+  assert.ok(draft.validationWarnings.includes("Add an explanation for reveal and review."));
+  assert.ok(draft.validationWarnings.includes("Two or more answer choices look duplicated."));
+  assert.equal(reviewSession.questionIds.includes(draft.id), false);
+  assert.equal(rejected.reviewStatus, "rejected");
+  assert.equal(rejectedSession.questionIds.includes(draft.id), false);
+  assert.equal(approved.reviewStatus, "approved");
+  assert.equal(approvedSession.questionIds.includes(draft.id), true);
+  assert.equal(locked.reviewStatus, "locked");
+  assert.throws(() => engine.updateQuestion(draft.id, { ...locked, difficulty: "medium" }), /Locked questions/);
+});
+
 test("one answer is accepted per player per question", () => {
   const engine = new TriviaEngine();
   const session = engine.createSession({ targetCorrect: 3 });

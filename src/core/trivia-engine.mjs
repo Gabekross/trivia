@@ -39,7 +39,11 @@ function cloneQuestion(question) {
     explanation: question.explanation,
     active: question.active !== false,
     archived: Boolean(question.archived),
-    validationStatus: question.validationStatus || "approved",
+    reviewStatus: normalizeReviewStatus(question.reviewStatus || question.validationStatus),
+    validationStatus: question.validationStatus || "valid",
+    validationWarnings: [...(question.validationWarnings || [])],
+    locked: Boolean(question.locked),
+    generationMetadata: question.generationMetadata || null,
     source: question.source || "seed",
     createdAt: question.createdAt,
     updatedAt: question.updatedAt,
@@ -47,17 +51,26 @@ function cloneQuestion(question) {
   };
 }
 
-function normalizeQuestion(input = {}, { existing = null, clock = Date } = {}) {
+const REVIEW_STATUSES = new Set(["draft", "needs_review", "approved", "rejected", "locked"]);
+
+function normalizeReviewStatus(status) {
+  const normalized = String(status || "approved").toLowerCase();
+  if (normalized === "valid" || normalized === "warning") return "approved";
+  return REVIEW_STATUSES.has(normalized) ? normalized : "approved";
+}
+
+function normalizeQuestion(input = {}, { existing = null, clock = Date, questionBank = [] } = {}) {
   const prompt = String(input.prompt ?? existing?.prompt ?? "").replace(/\s+/g, " ").trim();
   const category = String(input.category ?? existing?.category ?? "General Knowledge").replace(/\s+/g, " ").trim() || "General Knowledge";
   const difficulty = String(input.difficulty ?? existing?.difficulty ?? "medium").toLowerCase();
   const explanation = String(input.explanation ?? existing?.explanation ?? "").replace(/\s+/g, " ").trim();
   const choices = normalizeChoices(input.choices ?? existing?.choices ?? []);
   const correctCount = choices.filter((choice) => choice.isCorrect).length;
+  const reviewStatus = normalizeReviewStatus(input.reviewStatus ?? existing?.reviewStatus ?? existing?.validationStatus ?? (input.source === "ai" ? "needs_review" : "approved"));
   if (prompt.length < 6) throw new Error("Question prompt is required.");
   if (choices.length < 2 || choices.length > 6) throw new Error("Questions require 2 to 6 answer choices.");
   if (correctCount !== 1) throw new Error("Questions require exactly one correct answer.");
-  return {
+  const question = {
     id: existing?.id || input.id || makeId("q"),
     categoryId: input.categoryId || existing?.categoryId || category.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "general",
     category,
@@ -66,12 +79,19 @@ function normalizeQuestion(input = {}, { existing = null, clock = Date } = {}) {
     explanation,
     active: input.active ?? existing?.active ?? true,
     archived: Boolean(input.archived ?? existing?.archived ?? false),
-    validationStatus: input.validationStatus || existing?.validationStatus || "approved",
+    reviewStatus,
+    validationStatus: "valid",
+    validationWarnings: [],
+    locked: Boolean(input.locked ?? existing?.locked ?? reviewStatus === "locked"),
+    generationMetadata: input.generationMetadata || existing?.generationMetadata || null,
     source: input.source || existing?.source || "operator",
     createdAt: existing?.createdAt || nowIso(clock),
     updatedAt: nowIso(clock),
     choices
   };
+  question.validationWarnings = questionWarnings(question, questionBank);
+  question.validationStatus = question.validationWarnings.length ? "warning" : "valid";
+  return question;
 }
 
 function normalizeChoices(choices = []) {
@@ -84,6 +104,24 @@ function normalizeChoices(choices = []) {
       isCorrect: Boolean(choice.isCorrect)
     }))
     .filter((choice) => choice.text);
+}
+
+function questionWarnings(question, questionBank = []) {
+  const warnings = [];
+  const promptKey = normalizedText(question.prompt);
+  const duplicatePrompt = questionBank.some((item) => item.id !== question.id && !item.archived && normalizedText(item.prompt) === promptKey);
+  const choiceKeys = question.choices.map((choice) => normalizedText(choice.text));
+  const duplicateChoice = choiceKeys.some((key, index) => key && choiceKeys.indexOf(key) !== index);
+  if (!question.prompt.includes("?")) warnings.push("Prompt may need a clear question mark.");
+  if (!question.explanation) warnings.push("Add an explanation for reveal and review.");
+  if (duplicateChoice) warnings.push("Two or more answer choices look duplicated.");
+  if (duplicatePrompt) warnings.push("A similar prompt already exists in the question bank.");
+  if (question.category.toLowerCase() === "general knowledge") warnings.push("Consider assigning a more specific category.");
+  return warnings;
+}
+
+function normalizedText(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 function defaultConfiguration(input = {}) {
@@ -115,7 +153,8 @@ function defaultConfiguration(input = {}) {
 export class TriviaEngine {
   constructor({ clock = Date, questionBank = defaultQuestions } = {}) {
     this.clock = clock;
-    this.questionBank = questionBank.map((question) => normalizeQuestion(question, { clock: this.clock }));
+    this.questionBank = [];
+    for (const question of questionBank) this.questionBank.push(normalizeQuestion(question, { clock: this.clock, questionBank: this.questionBank }));
     this.sessions = new Map();
     this.joinCodes = new Map();
   }
@@ -138,7 +177,8 @@ export class TriviaEngine {
     this.sessions.clear();
     this.joinCodes.clear();
     if (state.questionBank?.length) {
-      this.questionBank = state.questionBank.map((question) => normalizeQuestion(question, { clock: this.clock }));
+      this.questionBank = [];
+      for (const question of state.questionBank) this.questionBank.push(normalizeQuestion(question, { clock: this.clock, questionBank: this.questionBank }));
     }
     for (const saved of state.sessions || []) {
       const session = {
@@ -198,7 +238,7 @@ export class TriviaEngine {
   }
 
   addQuestion(input = {}) {
-    const question = normalizeQuestion(input, { clock: this.clock });
+    const question = normalizeQuestion(input, { clock: this.clock, questionBank: this.questionBank });
     this.questionBank.push(question);
     return cloneQuestion(question);
   }
@@ -206,7 +246,8 @@ export class TriviaEngine {
   updateQuestion(questionId, input = {}) {
     const index = this.questionBank.findIndex((question) => question.id === questionId);
     if (index === -1) throw new Error("Question not found");
-    const question = normalizeQuestion({ ...input, id: questionId }, { existing: this.questionBank[index], clock: this.clock });
+    if (this.questionBank[index].locked) throw new Error("Locked questions must be unlocked before editing.");
+    const question = normalizeQuestion({ ...input, id: questionId }, { existing: this.questionBank[index], clock: this.clock, questionBank: this.questionBank });
     this.questionBank[index] = question;
     return cloneQuestion(question);
   }
@@ -214,12 +255,27 @@ export class TriviaEngine {
   archiveQuestion(questionId) {
     const index = this.questionBank.findIndex((question) => question.id === questionId);
     if (index === -1) throw new Error("Question not found");
-    this.questionBank[index] = normalizeQuestion({ active: false, archived: true }, { existing: this.questionBank[index], clock: this.clock });
+    this.questionBank[index] = normalizeQuestion({ active: false, archived: true, locked: false }, { existing: this.questionBank[index], clock: this.clock, questionBank: this.questionBank });
+    return cloneQuestion(this.questionBank[index]);
+  }
+
+  reviewQuestion(questionId, action) {
+    const index = this.questionBank.findIndex((question) => question.id === questionId);
+    if (index === -1) throw new Error("Question not found");
+    const reviewAction = String(action || "").toUpperCase();
+    const changes = {
+      APPROVE: { reviewStatus: "approved", active: true, archived: false, locked: false },
+      REJECT: { reviewStatus: "rejected", active: false, archived: false, locked: false },
+      LOCK: { reviewStatus: "locked", active: true, archived: false, locked: true },
+      UNLOCK: { reviewStatus: "approved", active: true, archived: false, locked: false }
+    }[reviewAction];
+    if (!changes) throw new Error("Unknown review action.");
+    this.questionBank[index] = normalizeQuestion(changes, { existing: this.questionBank[index], clock: this.clock, questionBank: this.questionBank });
     return cloneQuestion(this.questionBank[index]);
   }
 
   activeQuestionBank() {
-    return this.questionBank.filter((question) => question.active !== false && !question.archived);
+    return this.questionBank.filter((question) => question.active !== false && !question.archived && ["approved", "locked"].includes(normalizeReviewStatus(question.reviewStatus)));
   }
 
   questionForSession(session, questionId) {

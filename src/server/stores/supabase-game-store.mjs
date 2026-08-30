@@ -66,6 +66,13 @@ export class SupabaseGameStore extends GameStore {
     return question;
   }
 
+  async reviewQuestion(questionId, action) {
+    await this.prepare();
+    const question = this.engine.reviewQuestion(questionId, action);
+    await this.persist();
+    return question;
+  }
+
   async advanceTimers(sessionId) {
     await this.prepare();
     const session = this.engine.advanceTimers(sessionId);

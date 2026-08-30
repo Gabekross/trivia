@@ -353,6 +353,7 @@ function questionBuilder() {
         ${questionForm.choices.map((choice, index) => questionChoiceInput(choice, index)).join("")}
       </div>
       <label class="label">Explanation<textarea id="questionExplanation" rows="2">${escapeHtml(questionForm.explanation)}</textarea></label>
+      ${questionWarningsPanel(questionForm.validationWarnings)}
       <button id="saveQuestion" class="primaryBtn">${questionForm.id ? "Update Question" : "Save Question"}</button>
       <div class="questionBankList">
         ${questionBank.length ? questionBank.map(questionBankRow).join("") : "<span class='muted'>Load the question bank to edit rounds.</span>"}
@@ -373,15 +374,43 @@ function questionChoiceInput(choice, index) {
 }
 
 function questionBankRow(question) {
+  const warnings = question.validationWarnings || [];
   return `
     <div class="questionBankRow">
       <button class="questionBankTitle" data-edit-question="${question.id}">
         <strong>${escapeHtml(question.prompt)}</strong>
-        <span>${escapeHtml(question.category)} - ${escapeHtml(question.difficulty)}</span>
+        <span>${escapeHtml(question.category)} - ${escapeHtml(question.difficulty)} ${warnings.length ? `- ${warnings.length} warning${warnings.length === 1 ? "" : "s"}` : ""}</span>
       </button>
+      <span class="reviewChip ${escapeHtml(question.reviewStatus || "approved")}">${escapeHtml(reviewLabel(question.reviewStatus))}</span>
+      <div class="reviewActions">
+        ${question.reviewStatus !== "approved" ? `<button class="copyLink" data-review-question="${question.id}" data-review-action="APPROVE">Approve</button>` : ""}
+        ${question.reviewStatus !== "rejected" ? `<button class="copyLink" data-review-question="${question.id}" data-review-action="REJECT">Reject</button>` : ""}
+        ${question.reviewStatus !== "locked" ? `<button class="copyLink" data-review-question="${question.id}" data-review-action="LOCK">Lock</button>` : `<button class="copyLink" data-review-question="${question.id}" data-review-action="UNLOCK">Unlock</button>`}
+      </div>
       <button class="copyLink" data-archive-question="${question.id}">Archive</button>
     </div>
   `;
+}
+
+function questionWarningsPanel(warnings = []) {
+  if (!warnings.length) return `<div class="validationPanel clean"><strong>Validation clear</strong><span>No review warnings for this question.</span></div>`;
+  return `
+    <div class="validationPanel">
+      <strong>Review warnings</strong>
+      ${warnings.map((warning) => `<span>${escapeHtml(warning)}</span>`).join("")}
+    </div>
+  `;
+}
+
+function reviewLabel(status) {
+  const labels = {
+    draft: "Draft",
+    needs_review: "Needs Review",
+    approved: "Approved",
+    rejected: "Rejected",
+    locked: "Locked"
+  };
+  return labels[status] || "Approved";
 }
 
 function blankQuestionForm() {
@@ -391,6 +420,9 @@ function blankQuestionForm() {
     difficulty: "easy",
     prompt: "",
     explanation: "",
+    reviewStatus: "approved",
+    validationWarnings: [],
+    locked: false,
     choices: [
       { text: "", isCorrect: true },
       { text: "", isCorrect: false },
@@ -731,10 +763,26 @@ function bindEvents() {
         difficulty: question.difficulty,
         prompt: question.prompt,
         explanation: question.explanation,
+        reviewStatus: question.reviewStatus,
+        validationWarnings: question.validationWarnings || [],
+        locked: question.locked,
         choices: question.choices.slice(0, 4).map((choice) => ({ text: choice.text, isCorrect: choice.isCorrect }))
       };
       while (questionForm.choices.length < 4) questionForm.choices.push({ text: "", isCorrect: false });
       await render();
+    });
+  });
+  document.querySelectorAll("[data-review-question]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      try {
+        await operatorApi(`/api/questions/${encodeURIComponent(button.dataset.reviewQuestion)}/review`, {
+          method: "POST",
+          body: JSON.stringify({ action: button.dataset.reviewAction })
+        });
+        await loadQuestionBank();
+      } catch (error) {
+        showToast(error.message);
+      }
     });
   });
   document.querySelectorAll("[data-archive-question]").forEach((button) => {
@@ -900,6 +948,7 @@ async function saveQuestionFromForm() {
       difficulty: document.querySelector("#questionDifficulty").value,
       prompt: document.querySelector("#questionPrompt").value,
       explanation: document.querySelector("#questionExplanation").value,
+      reviewStatus: questionForm.reviewStatus || "approved",
       choices
     };
     const path = questionForm.id ? `/api/questions/${encodeURIComponent(questionForm.id)}` : "/api/questions";
@@ -910,6 +959,9 @@ async function saveQuestionFromForm() {
       difficulty: saved.question.difficulty,
       prompt: saved.question.prompt,
       explanation: saved.question.explanation,
+      reviewStatus: saved.question.reviewStatus,
+      validationWarnings: saved.question.validationWarnings || [],
+      locked: saved.question.locked,
       choices: saved.question.choices.slice(0, 4).map((choice) => ({ text: choice.text, isCorrect: choice.isCorrect }))
     };
     while (questionForm.choices.length < 4) questionForm.choices.push({ text: "", isCorrect: false });

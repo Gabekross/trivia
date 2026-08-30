@@ -410,6 +410,62 @@ p {
   background: #ffffff;
 }
 
+.reviewChip {
+  justify-self: start;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #124f8c;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.reviewChip.rejected {
+  background: #ffe9e5;
+  color: #a3321d;
+}
+
+.reviewChip.locked {
+  background: #e8f7ee;
+  color: #17633b;
+}
+
+.reviewChip.needs_review,
+.reviewChip.draft {
+  background: #fff4d7;
+  color: #805100;
+}
+
+.reviewActions {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 6px;
+}
+
+.validationPanel {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid #ffd89a;
+  border-radius: 8px;
+  background: #fff8e9;
+  color: #6f4700;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.validationPanel.clean {
+  border-color: #bbebce;
+  background: #effaf3;
+  color: #17633b;
+}
+
+.validationPanel strong {
+  color: inherit;
+}
+
 .questionBankTitle {
   display: grid;
   min-width: 0;
