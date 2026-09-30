@@ -55,7 +55,11 @@ document.addEventListener("focusout", () => {
   }, 350);
 });
 
-await bootstrap();
+try {
+  await bootstrap();
+} catch (error) {
+  renderStartupError(error);
+}
 
 async function bootstrap() {
   activeTab = initialRoute.tab;
@@ -104,20 +108,23 @@ async function render(snapshotOverride = null) {
   }
   isRendering = true;
   try {
-    const snapshot = snapshotOverride || await snapshotForActiveTab();
+    let snapshot;
+    try {
+      snapshot = snapshotOverride || await snapshotForActiveTab();
+    } catch (error) {
+      if (activeTab === "operator" && isOperatorAuthError(error)) {
+        renderOperatorUnlock(error.message);
+        return;
+      }
+      renderStartupError(error);
+      return;
+    }
     joinCode = snapshot.session.joinCode;
     document.body.classList.toggle("isPlayerRoute", activeTab === "player");
     app.innerHTML = `
       <div class="shell theme-${activeTheme} route-${activeTab}">
         ${activeTab === "player" ? "" : `
-          <header class="topbar">
-            <div class="brand"><span class="brandMark">FT</span><span>Family Trivia Codex</span></div>
-            <nav class="tabs" aria-label="Interfaces">
-              ${tabButton("operator", "Operator")}
-              ${tabButton("player", "Player")}
-              ${tabButton("display", "Display")}
-            </nav>
-          </header>
+          ${topbar()}
         `}
         ${activeTab === "operator" ? operatorView(snapshot) : ""}
         ${activeTab === "player" ? playerView(snapshot) : ""}
@@ -134,6 +141,81 @@ async function render(snapshotOverride = null) {
       pendingRender = false;
     }
   }
+}
+
+function renderOperatorUnlock(message = "Operator authorization is required.") {
+  document.body.classList.toggle("isPlayerRoute", false);
+  app.innerHTML = `
+    <div class="shell theme-${activeTheme} route-operator">
+      ${topbar()}
+      <section class="unlockScreen">
+        <form id="operatorUnlockForm" class="unlockPanel">
+          <span class="eyebrow">Operator Access</span>
+          <h1>Unlock the control room</h1>
+          <p>The live operator console is protected on Vercel. Enter the operator session secret you set for this deployment.</p>
+          <label class="label">Operator key
+            <input id="operatorUnlockSecret" type="password" value="${escapeHtml(operatorSecret)}" placeholder="Enter operator key" autocomplete="current-password" autofocus>
+          </label>
+          <div class="unlockActions">
+            <button class="primaryBtn" type="submit">Unlock Operator</button>
+            <button class="secondaryBtn" type="button" data-tab="player">Player View</button>
+            <button class="secondaryBtn" type="button" data-tab="display">Display View</button>
+          </div>
+          <p class="formNote">${escapeHtml(message)}</p>
+        </form>
+      </section>
+    </div>
+  `;
+  bindEvents();
+  document.querySelector("#operatorUnlockForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const input = document.querySelector("#operatorUnlockSecret");
+    operatorSecret = input?.value || "";
+    storeOperatorSecret(operatorSecret);
+    await render();
+  });
+  document.querySelector("#operatorUnlockSecret")?.focus();
+}
+
+function renderStartupError(error) {
+  document.body.classList.toggle("isPlayerRoute", false);
+  app.innerHTML = `
+    <div class="shell theme-${activeTheme} route-operator">
+      ${topbar()}
+      <section class="unlockScreen">
+        <div class="unlockPanel">
+          <span class="eyebrow">Startup Check</span>
+          <h1>Trivia could not load</h1>
+          <p>The app reached the server, but the interface could not finish loading. Refresh the page, or check the deployment configuration if this keeps happening.</p>
+          <div class="unlockActions">
+            <button id="reloadApp" class="primaryBtn" type="button">Try Again</button>
+            <button class="secondaryBtn" type="button" data-tab="player">Player View</button>
+          </div>
+          <p class="formNote">${escapeHtml(error?.message || "Unknown startup error")}</p>
+        </div>
+      </section>
+    </div>
+  `;
+  bindEvents();
+  document.querySelector("#reloadApp")?.addEventListener("click", () => window.location.reload());
+  console.error(error);
+}
+
+function topbar() {
+  return `
+    <header class="topbar">
+      <div class="brand"><span class="brandMark">FT</span><span>Family Trivia Codex</span></div>
+      <nav class="tabs" aria-label="Interfaces">
+        ${tabButton("operator", "Operator")}
+        ${tabButton("player", "Player")}
+        ${tabButton("display", "Display")}
+      </nav>
+    </header>
+  `;
+}
+
+function isOperatorAuthError(error) {
+  return error?.status === 401 || /operator authorization/i.test(error?.message || "");
 }
 
 async function snapshotForActiveTab() {
@@ -1173,7 +1255,11 @@ async function api(path, options = {}) {
     ...options
   });
   const body = await response.json();
-  if (!response.ok) throw new Error(body.error || "Request failed");
+  if (!response.ok) {
+    const error = new Error(body.error || "Request failed");
+    error.status = response.status;
+    throw error;
+  }
   return body;
 }
 

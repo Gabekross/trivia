@@ -264,6 +264,49 @@ p {
   padding: 18px;
 }
 
+.unlockScreen {
+  display: grid;
+  min-height: calc(100vh - 72px);
+  place-items: center;
+  padding: 24px;
+}
+
+.unlockPanel {
+  display: grid;
+  width: min(520px, 100%);
+  gap: 18px;
+  padding: clamp(24px, 4vw, 40px);
+  border: 1px solid rgba(229, 233, 240, 0.92);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: var(--shadow-lift);
+}
+
+.unlockPanel h1 {
+  color: var(--primary);
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.05;
+}
+
+.unlockPanel p {
+  color: var(--muted);
+}
+
+.unlockActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.formNote {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent-3) 14%, white);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .controlRail,
 .liveDesk,
 .questionPanel,
