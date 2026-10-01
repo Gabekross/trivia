@@ -1,6 +1,15 @@
 import { GameStore } from "./game-store.mjs";
 import { TriviaEngine } from "../../core/trivia-engine.mjs";
 
+const MAX_WRITE_ATTEMPTS = 30;
+
+class StateConflictError extends Error {
+  constructor(message = "Game state changed before it could be saved.") {
+    super(message);
+    this.name = "StateConflictError";
+  }
+}
+
 export class SupabaseGameStore extends GameStore {
   constructor({ supabaseUrl, serviceRoleKey, defaultSessionConfig = {}, engine = new TriviaEngine(), fetchImpl = fetch } = {}) {
     super();
@@ -10,6 +19,7 @@ export class SupabaseGameStore extends GameStore {
     this.engine = engine;
     this.fetch = fetchImpl;
     this.snapshotId = "primary";
+    this.remoteRevision = 0;
     this.ready = this.load();
   }
 
@@ -20,20 +30,18 @@ export class SupabaseGameStore extends GameStore {
   }
 
   async bootstrap() {
-    await this.prepare();
-    let session = [...this.engine.sessions.values()].at(-1);
-    if (!session) {
-      session = this.engine.createSession(this.defaultSessionConfig);
-      await this.persist();
-    }
-    return { sessionId: session.id, joinCode: session.joinCode };
+    return this.mutateAndPersist(() => {
+      let session = [...this.engine.sessions.values()].at(-1);
+      if (!session) session = this.engine.createSession(this.defaultSessionConfig);
+      return { sessionId: session.id, joinCode: session.joinCode };
+    }, { persistIf: (result, beforeState) => beforeState.sessions.length === 0 });
   }
 
   async createSession(config = {}) {
-    await this.prepare();
-    const session = this.engine.createSession(config);
-    await this.persist();
-    return { sessionId: session.id, joinCode: session.joinCode, session };
+    return this.mutateAndPersist(() => {
+      const session = this.engine.createSession(config);
+      return { sessionId: session.id, joinCode: session.joinCode, session };
+    });
   }
 
   async findSessionByJoinCode(joinCode) {
@@ -58,62 +66,50 @@ export class SupabaseGameStore extends GameStore {
   }
 
   async saveQuestion(question) {
-    await this.prepare();
-    const saved = question.id ? this.engine.updateQuestion(question.id, question) : this.engine.addQuestion(question);
-    await this.persist();
-    return saved;
+    return this.mutateAndPersist(() => question.id ? this.engine.updateQuestion(question.id, question) : this.engine.addQuestion(question));
   }
 
   async generateQuestionDrafts(input) {
-    await this.prepare();
-    const questions = this.engine.generateQuestionDrafts(input);
-    await this.persist();
-    return questions;
+    return this.mutateAndPersist(() => this.engine.generateQuestionDrafts(input));
   }
 
   async archiveQuestion(questionId) {
-    await this.prepare();
-    const question = this.engine.archiveQuestion(questionId);
-    await this.persist();
-    return question;
+    return this.mutateAndPersist(() => this.engine.archiveQuestion(questionId));
   }
 
   async reviewQuestion(questionId, action) {
-    await this.prepare();
-    const question = this.engine.reviewQuestion(questionId, action);
-    await this.persist();
-    return question;
+    return this.mutateAndPersist(() => this.engine.reviewQuestion(questionId, action));
   }
 
   async advanceTimers(sessionId) {
-    await this.prepare();
-    const session = this.engine.advanceTimers(sessionId);
-    if (!session) return { sessionId, advanced: false, eventType: null };
-    const eventType = session.auditLog.at(-1)?.eventType || "SESSION_UPDATED";
-    await this.persist();
-    return { sessionId, advanced: true, eventType, session };
+    return this.mutateAndPersist(() => {
+      const session = this.engine.advanceTimers(sessionId);
+      if (!session) return { sessionId, advanced: false, eventType: null };
+      const eventType = session.auditLog.at(-1)?.eventType || "SESSION_UPDATED";
+      return { sessionId, advanced: true, eventType, session };
+    }, { persistIf: (result) => result.advanced });
   }
 
   async joinSession(joinCode, displayName, options = {}) {
-    await this.prepare();
-    const player = this.engine.joinSession(joinCode, displayName, options);
-    const session = this.engine.findSessionByJoinCode(joinCode);
-    await this.persist();
-    return { sessionId: session.id, joinCode: session.joinCode, playerId: player.id, player, session };
+    return this.mutateAndPersist(() => {
+      const player = this.engine.joinSession(joinCode, displayName, options);
+      const session = this.engine.findSessionByJoinCode(joinCode);
+      return { sessionId: session.id, joinCode: session.joinCode, playerId: player.id, player, session };
+    });
   }
 
   async operatorAction(sessionId, action) {
-    await this.prepare();
-    const session = this.engine.operatorAction(sessionId, action);
-    await this.persist();
-    return { session };
+    return this.mutateAndPersist(() => {
+      const session = this.engine.operatorAction(sessionId, action);
+      return { session };
+    });
   }
 
   async submitAnswer({ sessionId, playerId, choiceId, idempotencyKey }) {
-    await this.prepare();
-    const answer = this.engine.submitAnswer({ sessionId, playerId, choiceId, idempotencyKey });
-    await this.persist();
-    return { answer, session: this.engine.requireSession(sessionId) };
+    return this.mutateAndPersist(() => {
+      const answer = this.engine.submitAnswer({ sessionId, playerId, choiceId, idempotencyKey });
+      return { answer, session: this.engine.requireSession(sessionId) };
+    });
   }
 
   async load() {
@@ -127,24 +123,49 @@ export class SupabaseGameStore extends GameStore {
 
   async loadRemoteState() {
     this.assertConfigured();
-    const rows = await this.request(`/rest/v1/game_state_snapshots?id=eq.${encodeURIComponent(this.snapshotId)}&select=state`, {
+    const rows = await this.request(`/rest/v1/game_state_snapshots?id=eq.${encodeURIComponent(this.snapshotId)}&select=state,revision`, {
       method: "GET"
     });
-    const state = rows?.[0]?.state;
+    const row = rows?.[0];
+    const state = row?.state;
+    this.remoteRevision = Number(row?.revision || 0);
     if (state) this.engine.importState(state);
   }
 
-  async persist() {
+  async mutateAndPersist(operation, { persistIf = () => true } = {}) {
+    let lastConflict = null;
+    for (let attempt = 1; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      await this.prepare();
+      const beforeState = this.engine.exportState();
+      const expectedRevision = this.remoteRevision;
+      const result = operation();
+      if (!persistIf(result, beforeState)) return result;
+      try {
+        await this.persist({ expectedRevision });
+        return result;
+      } catch (error) {
+        if (!isStateConflict(error)) throw error;
+        lastConflict = error;
+        await waitForRetry(attempt);
+      }
+    }
+    throw lastConflict || new StateConflictError("Game state stayed busy for too long.");
+  }
+
+  async persist({ expectedRevision = this.remoteRevision } = {}) {
     const state = this.engine.exportState();
-    await this.request("/rest/v1/game_state_snapshots?id=eq.primary", {
+    const nextRevision = Number(expectedRevision || 0) + 1;
+    const rows = await this.request(`/rest/v1/game_state_snapshots?id=eq.${encodeURIComponent(this.snapshotId)}&revision=eq.${encodeURIComponent(expectedRevision)}&select=revision`, {
       method: "PATCH",
-      headers: { prefer: "return=minimal" },
+      headers: { prefer: "return=representation" },
       body: {
         state,
-        revision: Date.now(),
+        revision: nextRevision,
         updated_at: new Date().toISOString()
       }
     });
+    if (!rows?.length) throw new StateConflictError();
+    this.remoteRevision = Number(rows[0].revision || nextRevision);
     await this.rebuildSessionIndex(state);
   }
 
@@ -200,4 +221,13 @@ export class SupabaseGameStore extends GameStore {
     const text = await response.text();
     return text ? JSON.parse(text) : null;
   }
+}
+
+function isStateConflict(error) {
+  return error instanceof StateConflictError || error?.name === "StateConflictError";
+}
+
+async function waitForRetry(attempt) {
+  const delayMs = Math.min(120, 8 + attempt * 4);
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
 }

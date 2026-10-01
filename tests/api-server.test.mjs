@@ -165,8 +165,8 @@ test("dev server exposes trusted mutation API with persistence", async () => {
     assert.equal(typeof bootstrap.origins.current, "string");
     assert.equal(displayRoute.status, 200);
     assert.match(displayHtml, /Family Trivia Codex/);
-    assert.match(displayHtml, /src="\/app\.mjs"/);
-    assert.match(displayHtml, /href="\/styles\.css"/);
+    assert.match(displayHtml, /src="\/app\.mjs\?v=/);
+    assert.match(displayHtml, /href="\/styles\.css\?v=/);
     assert.equal(existsSync("data/trivia-state.json"), true);
   } finally {
     server.kill();

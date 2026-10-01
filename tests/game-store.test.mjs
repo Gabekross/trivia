@@ -37,14 +37,18 @@ test("SupabaseGameStore requires Supabase credentials", async () => {
 test("SupabaseGameStore persists through Supabase REST", async () => {
   const calls = [];
   let state = { sessions: [] };
+  let revision = 0;
   const fetchImpl = async (url, options) => {
     calls.push({ url, options });
     if (url.includes("/rest/v1/game_state_snapshots") && options.method === "GET") {
-      return jsonResponse([{ state }]);
+      return jsonResponse([{ state, revision }]);
     }
     if (url.includes("/rest/v1/game_state_snapshots") && options.method === "PATCH") {
+      const expectedRevision = revisionFromUrl(url);
+      if (expectedRevision !== revision) return jsonResponse([]);
       state = JSON.parse(options.body).state;
-      return emptyResponse();
+      revision += 1;
+      return jsonResponse([{ revision }]);
     }
     if (url.includes("/rest/v1/game_session_index") && options.method === "POST") {
       return emptyResponse();
@@ -77,6 +81,48 @@ test("SupabaseGameStore persists through Supabase REST", async () => {
   assert.ok(calls.some((call) => call.url.includes("/rest/v1/game_update_events")));
 });
 
+test("SupabaseGameStore retries joins when the snapshot revision changes concurrently", async () => {
+  let state = { sessions: [] };
+  let revision = 0;
+  let joinPatchConflicted = false;
+  const fetchImpl = async (url, options) => {
+    if (url.includes("/rest/v1/game_state_snapshots") && options.method === "GET") {
+      return jsonResponse([{ state, revision }]);
+    }
+    if (url.includes("/rest/v1/game_state_snapshots") && options.method === "PATCH") {
+      const nextState = JSON.parse(options.body).state;
+      const isJoinPatch = nextState.sessions[0]?.players?.length === 1;
+      if (isJoinPatch && !joinPatchConflicted) {
+        joinPatchConflicted = true;
+        return jsonResponse([]);
+      }
+      const expectedRevision = revisionFromUrl(url);
+      if (expectedRevision !== revision) return jsonResponse([]);
+      state = nextState;
+      revision += 1;
+      return jsonResponse([{ revision }]);
+    }
+    if (url.includes("/rest/v1/game_session_index") && options.method === "POST") {
+      return emptyResponse();
+    }
+    return textResponse(404, "not found");
+  };
+
+  const store = new SupabaseGameStore({
+    supabaseUrl: "https://example.supabase.co",
+    serviceRoleKey: "service-role",
+    defaultSessionConfig: { title: "Concurrent Join Test", targetCorrect: 2 },
+    fetchImpl
+  });
+  const boot = await store.bootstrap();
+  const joined = await store.joinSession(boot.joinCode, "Jordan");
+  const snapshot = await store.getSnapshot(boot.sessionId, "PLAYER", joined.playerId);
+
+  assert.equal(joinPatchConflicted, true);
+  assert.equal(snapshot.session.playerCount, 1);
+  assert.equal(snapshot.player.displayName, "Jordan");
+});
+
 function jsonResponse(body) {
   return {
     ok: true,
@@ -99,4 +145,9 @@ function textResponse(status, body) {
     status,
     text: async () => body
   };
+}
+
+function revisionFromUrl(url) {
+  const match = String(url).match(/[?&]revision=eq\.([^&]+)/);
+  return match ? Number(decodeURIComponent(match[1])) : NaN;
 }
