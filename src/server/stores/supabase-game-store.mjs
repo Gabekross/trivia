@@ -20,7 +20,7 @@ export class SupabaseGameStore extends GameStore {
     this.fetch = fetchImpl;
     this.snapshotId = "primary";
     this.remoteRevision = 0;
-    this.ready = this.load();
+    this.ready = Promise.resolve();
   }
 
   assertConfigured() {
